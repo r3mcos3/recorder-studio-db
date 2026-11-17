@@ -63,6 +63,23 @@ jobs:
           docker restart rs
           wait_running || { docker logs rs; exit 1; }
           echo "restart OK"
+      - name: Switch engine from the panel API (to the other server and back), no add-on restart
+        run: |
+          call() { curl -s -X POST localhost:8099/api/command -d "$1"; }
+          wait_for() {
+            for i in $(seq 1 120); do
+              call '{"type":"recorder_studio/db_status"}' | grep -q "\"engine\": \"$1\", \"state\": \"running\", \"error\": null" && return 0
+              sleep 1
+            done
+            return 1
+          }
+          other=$([ "${{ matrix.engine }}" = postgresql ] && echo mariadb || echo postgresql)
+          call "{\"type\":\"recorder_studio/db_set_engine\",\"engine\":\"$other\",\"confirm\":true}" | grep -q '"result"' || { docker logs rs; exit 1; }
+          wait_for "$other" || { docker logs rs; exit 1; }
+          call "{\"type\":\"recorder_studio/db_set_engine\",\"engine\":\"${{ matrix.engine }}\",\"confirm\":true}" | grep -q '"result"' || { docker logs rs; exit 1; }
+          wait_for "${{ matrix.engine }}" || { docker logs rs; exit 1; }
+          call '{"type":"recorder_studio/db_set_engine","engine":"sqlite","confirm":true}' | grep -q '"result"' || { docker logs rs; exit 1; }
+          echo "switch OK"
       - name: Show the add-on log
         if: always()
         run: docker logs rs 2>&1 | tail -40

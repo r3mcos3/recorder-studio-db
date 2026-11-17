@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+- Choose the database engine (SQLite, PostgreSQL, MariaDB) and the SQLite file from the **Database** tab; no add-on restart needed. The add-on option `engine` is only the starting value.
+- The add-on refuses to stop the database server Home Assistant is recording into.
+
 ## 0.2.1
 - MariaDB: network access is now enabled (Alpine ships it with `skip-networking`), so Home Assistant can connect.
 - The database server only counts as running after a real TCP login works.

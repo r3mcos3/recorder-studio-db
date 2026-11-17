@@ -78,8 +78,8 @@ def make_app(studio: Studio | None = None, ha: HAClient | None = None) -> web.Ap
     ha = ha or HAClient()
     app = web.Application(middlewares=[only_ingress])
     if studio is None:
-        engine = addon_options().get("engine", "sqlite")
-        studio = Studio(ha, server=engines.DatabaseServer(engine) if engine in ("postgresql", "mariadb") else None)
+        studio = Studio(ha)
+        studio.server = studio.make_server()
     app["ha"], app["studio"] = ha, studio
     app.router.add_post("/api/command", command)
     app.router.add_get("/", index)

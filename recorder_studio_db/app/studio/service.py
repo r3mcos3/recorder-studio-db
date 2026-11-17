@@ -10,7 +10,7 @@ import time
 from typing import Any
 
 from . import store
-from .const import ACTIVE_WINDOW, ATTR_REFRESH_SECONDS, CONFIG_DIR, CONFIG_FILE, DATA_DIR, DEFAULT_SQLITE_FILE, GENERATED_FILE, LEGACY_FILE, STORE_FILE, addon_options, sqlite_file
+from .const import ACTIVE_WINDOW, ENGINES, ATTR_REFRESH_SECONDS, CONFIG_DIR, CONFIG_FILE, DATA_DIR, DEFAULT_SQLITE_FILE, GENERATED_FILE, LEGACY_FILE, STORE_FILE, addon_options, sqlite_file
 from . import engines
 from .core import alerts, db_stats, db_stats_sql, history, suggestions, tree, yaml_writer
 from .ha import HAClient, HAError
@@ -56,8 +56,47 @@ class Studio:
         self.pending_restart = True
 
     # ---- database ----------------------------------------------------
+    @property
+    def engine(self) -> str:
+        """Chosen in the panel; falls back to the add-on option."""
+        e = self.data.get("engine") or addon_options().get("engine", "sqlite")
+        return e if e in ENGINES else "sqlite"
+
+    @property
+    def sqlite_file(self) -> str:
+        name = str(self.data.get("sqlite_file") or sqlite_file()).strip().lstrip("/")
+        return name if name and ".." not in name else DEFAULT_SQLITE_FILE
+
     def db_path(self) -> Path:
-        return self.config_dir / sqlite_file()
+        return self.config_dir / self.sqlite_file
+
+    def make_server(self) -> engines.DatabaseServer | None:
+        return engines.DatabaseServer(self.engine) if self.engine in ("postgresql", "mariadb") else None
+
+    async def set_engine(self, engine: str, sqlite_name: str | None = None) -> None:
+        """Switch the database engine this add-on offers; starts/stops the server accordingly."""
+        if engine not in ENGINES:
+            raise ValueError(f"unknown engine {engine}")
+        name = (sqlite_name or "").strip().lstrip("/") or self.sqlite_file
+        if ".." in name or "/" in name or not name.endswith((".db", ".sqlite", ".sqlite3")):
+            raise ValueError("The SQLite file must be a plain file name in the config folder, ending in .db")
+        if (engine, name) == (self.engine, self.sqlite_file):
+            return
+        old = self.server
+        if old and engine != old.engine and (self.backend == "sql" or self.data["options"].get("db_url") == await self.target_url()):
+            raise ValueError(
+                f"Home Assistant is set up to record into {old.engine}. Switch the recorder back first "
+                "(Back to default SQLite), restart Home Assistant, then change the engine."
+            )
+        self.data["engine"], self.data["sqlite_file"] = engine, name
+        if engine != (old.engine if old else "sqlite"):
+            if old:
+                await old.stop()
+            self.server = self.make_server()
+            if self.server:
+                await self.server.start()
+        self.backend = "sqlite"
+        await self.save()
 
     async def _uses_server(self) -> bool:
         """True when Home Assistant is currently recording into the database server run by this add-on."""
@@ -86,9 +125,9 @@ class Studio:
 
     async def target_url(self) -> str | None:
         """The recorder db_url that matches the chosen engine (None = Home Assistant's default SQLite file)."""
-        engine = addon_options().get("engine", "sqlite")
+        engine = self.engine
         if engine == "sqlite":
-            name = sqlite_file()
+            name = self.sqlite_file
             return None if name == DEFAULT_SQLITE_FILE else f"sqlite:////config/{name}"
         return engines.build_db_url(engine, await self.ha.addon_hostname(), self.server.creds if self.server else engines.load_credentials())
 

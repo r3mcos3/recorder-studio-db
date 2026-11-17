@@ -20,6 +20,9 @@ class FakeHA:
     async def call_service(self, domain, service, data=None):
         self.calls.append((domain, service, data or {}))
 
+    async def addon_hostname(self):
+        return "abc-recorder-studio-db"
+
     async def backups(self):
         return ["2026-11-16T10:00:00+00:00"]
 
@@ -100,9 +103,9 @@ async def test_db_status_sqlite_default(client):
     assert status == 200 and r["engine"] == "sqlite" and r["default_sqlite"] and r["configured"] and r["target_url"] is None
 
 
-async def test_db_activate_separate_sqlite_file(client, studio, monkeypatch):
-    monkeypatch.setattr("studio.service.sqlite_file", lambda: "recorder_studio.db")
-    monkeypatch.setattr("studio.api.sqlite_file", lambda: "recorder_studio.db")
+async def test_db_activate_separate_sqlite_file(client, studio):
+    status, body = await cmd(client, type="recorder_studio/db_set_engine", engine="sqlite", sqlite_file="recorder_studio.db", confirm=True)
+    assert status == 200 and studio.sqlite_file == "recorder_studio.db"
     status, body = await cmd(client, type="recorder_studio/db_activate", confirm=True)
     assert status == 200
     assert "db_url: sqlite:////config/recorder_studio.db" in (studio.config_dir / "recorder_studio.yaml").read_text()
@@ -115,3 +118,50 @@ async def test_db_activate_separate_sqlite_file(client, studio, monkeypatch):
 async def test_db_activate_needs_confirm(client):
     status, body = await cmd(client, type="recorder_studio/db_activate")
     assert status == 400 and body["code"] == "confirm_required"
+
+
+class FakeServer:
+    def __init__(self, engine):
+        self.engine, self.running, self.state, self.error, self.stopped = engine, False, "stopped", None, False
+        self.creds = {"user": "homeassistant", "database": "homeassistant", "password": "pw"}
+
+    async def start(self):
+        self.running, self.state = True, "running"
+
+    async def stop(self):
+        self.running, self.state, self.stopped = False, "stopped", True
+
+    def info(self):
+        return {"engine": self.engine, "state": self.state, "error": None, "port": 5432}
+
+
+async def test_choose_engine_from_the_panel(client, studio, monkeypatch):
+    monkeypatch.setattr("studio.engines.DatabaseServer", FakeServer)
+    status, body = await cmd(client, type="recorder_studio/db_set_engine", engine="postgresql")
+    assert status == 400 and body["code"] == "confirm_required"
+    status, body = await cmd(client, type="recorder_studio/db_set_engine", engine="postgresql", confirm=True)
+    assert status == 200 and studio.engine == "postgresql" and studio.server.running
+    first = studio.server
+    status, body = await cmd(client, type="recorder_studio/db_status")
+    assert body["result"]["engine"] == "postgresql" and body["result"]["state"] == "running"
+    assert body["result"]["target_url"].startswith("postgresql://homeassistant:***@")
+    status, body = await cmd(client, type="recorder_studio/db_set_engine", engine="mariadb", confirm=True)
+    assert status == 200 and first.stopped and studio.server.engine == "mariadb"
+    status, body = await cmd(client, type="recorder_studio/db_set_engine", engine="sqlite", confirm=True)
+    assert status == 200 and studio.server is None and studio.engine == "sqlite"
+
+
+async def test_cannot_stop_the_server_home_assistant_records_into(client, studio, monkeypatch):
+    monkeypatch.setattr("studio.engines.DatabaseServer", FakeServer)
+    await cmd(client, type="recorder_studio/db_set_engine", engine="postgresql", confirm=True)
+    await cmd(client, type="recorder_studio/db_activate", confirm=True)
+    status, body = await cmd(client, type="recorder_studio/db_set_engine", engine="sqlite", confirm=True)
+    assert status == 400 and body["code"] == "invalid_engine" and studio.engine == "postgresql"
+    await cmd(client, type="recorder_studio/db_deactivate", confirm=True)
+    status, _ = await cmd(client, type="recorder_studio/db_set_engine", engine="sqlite", confirm=True)
+    assert status == 200
+
+
+async def test_invalid_engine_and_filename(client):
+    assert (await cmd(client, type="recorder_studio/db_set_engine", engine="oracle", confirm=True))[0] == 400
+    assert (await cmd(client, type="recorder_studio/db_set_engine", engine="sqlite", sqlite_file="../x.db", confirm=True))[0] == 400

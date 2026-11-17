@@ -56,6 +56,8 @@ class RecorderStudioPanel extends LitElement {
     narrow: { type: Boolean },
     _tab: { state: true },
     _db: { state: true },
+    _dbEngine: { state: true },
+    _dbFile: { state: true },
     _data: { state: true },
     _loading: { state: true },
     _error: { state: true },
@@ -82,6 +84,8 @@ class RecorderStudioPanel extends LitElement {
     super();
     this._tab = "overview";
     this._db = null;
+    this._dbEngine = null;
+    this._dbFile = null;
     this._data = null;
     this._loading = true;
     this._search = "";
@@ -692,7 +696,29 @@ class RecorderStudioPanel extends LitElement {
   /* ---------- Maintenance ---------- */
   async _loadDb() {
     const r = await this._run("db", () => this._ws("db_status"));
-    if (r) this._db = r;
+    if (r) {
+      this._db = r;
+      this._dbEngine = r.engine;
+      this._dbFile = r.sqlite_file;
+    }
+  }
+
+  _dbChooseEngine() {
+    const x = this._db;
+    const engine = this._dbEngine;
+    const names = { sqlite: "SQLite", postgresql: "PostgreSQL", mariadb: "MariaDB" };
+    this._confirm({
+      title: `Switch to ${names[engine]}`,
+      body: engine === "sqlite"
+        ? `The ${names[x.engine]} server is stopped and Home Assistant keeps using SQLite (${this._dbFile}). The server's data is kept.`
+        : `The ${names[engine]} server is started inside this add-on${x.engine !== "sqlite" ? ` and the ${names[x.engine]} server is stopped (its data is kept)` : ""}. Home Assistant keeps recording where it does now until you press "Use this database for the recorder".`,
+      confirmLabel: "Switch",
+      danger: false,
+      onConfirm: async () => {
+        const r = await this._run("db", () => this._ws("db_set_engine", { engine, sqlite_file: this._dbFile, confirm: true }), { success: `Engine set to ${names[engine]}.` });
+        if (r) await this._loadDb();
+      },
+    });
   }
 
   _dbAction(kind) {
@@ -729,7 +755,16 @@ class RecorderStudioPanel extends LitElement {
           ${x.error ? html`<div class="banner warn">${icon("warn")}<span>${x.error}</span></div>` : nothing}
           <p class="muted">Connection used by Home Assistant: <code>${x.target_url}</code></p>`
         : html`<p>Home Assistant keeps writing to the SQLite file <code>${x.sqlite_file}</code>; this add-on only reads it.</p>`}
-        <p class="muted">Change the engine in the add-on <b>Configuration</b> tab (option <code>engine</code>${server ? "" : html`, and <code>sqlite_file</code> for a separate SQLite file`}), then restart the add-on.</p>
+        <div class="row" style="align-items:center;flex-wrap:wrap;gap:8px">
+          <label>Engine
+            <select .value=${this._dbEngine} @change=${(e) => (this._dbEngine = e.target.value)}>
+              ${x.engines.map((id) => html`<option value=${id} ?selected=${id === this._dbEngine}>${names[id]}${id === "sqlite" ? "" : " (experimental)"}</option>`)}
+            </select>
+          </label>
+          ${this._dbEngine === "sqlite" ? html`<label>SQLite file <input type="text" .value=${this._dbFile} @input=${(e) => (this._dbFile = e.target.value)} /></label>` : nothing}
+          <button class="btn primary" ?disabled=${this._ro || !!this._busy || (this._dbEngine === x.engine && this._dbFile === x.sqlite_file)} @click=${() => this._dbChooseEngine()}>Switch engine…</button>
+        </div>
+        <p class="muted">The engine is stored by the add-on; the add-on option <code>engine</code> is only the starting value.</p>
       </div>
       <div class="card">
         <h3>Recorder</h3>

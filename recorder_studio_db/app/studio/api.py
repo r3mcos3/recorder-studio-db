@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .const import ADDON_VERSION, DEFAULT_SQLITE_FILE, addon_options, sqlite_file, CONFIG_FILE, GENERATED_FILE, LEGACY_FILE, READ_ONLY_MODE, addon_options
+from .const import ADDON_VERSION, DEFAULT_SQLITE_FILE, ENGINES, CONFIG_FILE, GENERATED_FILE, LEGACY_FILE, READ_ONLY_MODE, addon_options
 from .core import db_stats, migration
 from .core.rules import parse_manual_rules
 from .core.yaml_writer import atomic_write
@@ -59,7 +59,7 @@ async def get_state(s: Studio, msg: dict) -> dict:
     d = s.data
     return {
         "version": ADDON_VERSION,
-        "engine": addon_options().get("engine", "sqlite"),
+        "engine": s.engine,
         "db_files": (d.get("stats") or {}).get("files") if s.backend == "sql" else await asyncio.to_thread(db_stats.file_sizes, s.db_path()),
         "backend": s.backend,
         "sqlite": True,
@@ -284,21 +284,32 @@ async def migration_activate(s: Studio, msg: dict) -> dict:
 
 
 async def db_status(s: Studio, msg: dict) -> dict:
-    engine = addon_options().get("engine", "sqlite")
-    info = await asyncio.to_thread(s.server.info) if s.server else {"engine": "sqlite", "state": "n/a", "error": None}
+    engine = s.engine
+    info = await asyncio.to_thread(s.server.info) if s.server else {"engine": s.engine, "state": "n/a", "error": None}
     target = await s.target_url()
     current = s.data["options"].get("db_url")
     return {
         **info,
         "engine": engine,
-        "sqlite_file": sqlite_file(),
+        "sqlite_file": s.sqlite_file,
         "backend": s.backend,
+        "engines": list(ENGINES),
         "target_url": engines.mask_url(target) if target else None,
         "current_url": engines.mask_url(current) if current else None,
         "configured": (current or None) == target,
         "pending_restart": s.pending_restart,
-        "default_sqlite": sqlite_file() == DEFAULT_SQLITE_FILE,
+        "default_sqlite": s.sqlite_file == DEFAULT_SQLITE_FILE,
     }
+
+
+async def db_set_engine(s: Studio, msg: dict) -> dict:
+    _need_write()
+    _need_confirm(msg)
+    try:
+        await s.set_engine(str(msg.get("engine", "")), msg.get("sqlite_file"))
+    except ValueError as err:
+        raise ApiError("invalid_engine", str(err)) from None
+    return {"engine": s.engine}
 
 
 async def db_activate(s: Studio, msg: dict) -> dict:
@@ -327,4 +338,4 @@ async def db_deactivate(s: Studio, msg: dict) -> dict:
 
 COMMANDS = {f.__name__: f for f in (
     get_state, set_recorded, save_settings, analyze, preview_purge, purge, repack, restart, remove_orphans, save_alerts,
-    dismiss_suggestions, backup_status, db_status, db_activate, db_deactivate, migration_sources, migration_preview, migration_import, migration_activate)}
+    dismiss_suggestions, backup_status, db_status, db_set_engine, db_activate, db_deactivate, migration_sources, migration_preview, migration_import, migration_activate)}

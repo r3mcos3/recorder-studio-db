@@ -7,14 +7,14 @@ plus an optional database server run by this add-on.
 
 | Option | Meaning |
 | --- | --- |
-| `engine` | `sqlite` (Home Assistant's own file, read by the add-on), `postgresql` or `mariadb` (run by this add-on, experimental). |
+| `engine` | Starting value; you can change it later in the panel (Database tab). `sqlite` (Home Assistant's own file, read by the add-on), `postgresql` or `mariadb` (run by this add-on, experimental). |
 | `sqlite_file` | SQLite file in your Home Assistant config folder. Keep the default `home-assistant_v2.db`, or use a separate file such as `recorder_studio.db`. |
 | `log_level` | Add-on log verbosity. |
 
 ## Using PostgreSQL or MariaDB
 
-1. Set `engine`, save and restart the add-on.
-2. Open the **Database** tab and wait for the status to say *Running*.
+1. Open the **Database** tab, choose the engine and press *Switch engine*.
+2. Wait for the status to say *Running*.
 3. Click *Use this database for the recorder* and restart Home Assistant.
 
 Home Assistant then starts with an **empty** history in the new database. Your old history stays in the SQLite file;

@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-ADDON_VERSION = "0.2.1"
+ADDON_VERSION = "0.3.0"
 def _config_dir() -> Path:
     """`homeassistant_config` is mounted at /homeassistant (the add-on's own /config is a different folder)."""
     if os.environ.get("CONFIG_DIR"):
@@ -33,6 +33,8 @@ DEFAULT_DATA = {
     "history": [],
     "dismissed": [],
     "alerts": {"enabled": True, "free_percent": 10, "growth_percent": 25},
+    "engine": None,  # chosen in the panel; None = use the add-on option
+    "sqlite_file": None,
 }
 
 ALERT_INTERVAL_HOURS = 6
@@ -41,6 +43,7 @@ READ_ONLY_MODE = False
 
 
 DEFAULT_SQLITE_FILE = "home-assistant_v2.db"
+ENGINES = ("sqlite", "postgresql", "mariadb")
 ACTIVE_WINDOW = 900  # seconds: Home Assistant counts as "writing to this database" when its newest state is this recent
 
 
