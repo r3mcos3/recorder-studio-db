@@ -53,8 +53,9 @@ class HAClient:
             hello = await ws.receive_json()
             if hello.get("type") == "auth_required":
                 await ws.send_json({"type": "auth", "access_token": TOKEN})
-                if (await ws.receive_json()).get("type") != "auth_ok":
-                    raise HAError("websocket authentication failed")
+                reply = await ws.receive_json()
+                if reply.get("type") != "auth_ok":
+                    raise HAError(f"websocket authentication failed ({reply.get('type')}: {reply.get('message')}; token {'set' if TOKEN else 'MISSING'})")
             await ws.send_json({"id": 1, "type": command})
             msg = await ws.receive_json()
             if not msg.get("success"):
