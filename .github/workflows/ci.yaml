@@ -53,7 +53,7 @@ jobs:
           docker run -d --name rs -v "$PWD/data:/data" -v "$PWD/config:/homeassistant" -e STUDIO_DEV=1 -p 8099:8099 recorder-studio-db
           wait_running() {
             for i in $(seq 1 120); do
-              curl -sf -X POST localhost:8099/api/command -d '{"type":"recorder_studio/db_status"}' | grep -q '"state": "running"' && return 0
+              curl -sf -X POST localhost:8099/api/command -d '{"type":"recorder_studio/db_status"}' | grep -q '"state": "running", "error": null' && return 0
               sleep 1
             done
             return 1

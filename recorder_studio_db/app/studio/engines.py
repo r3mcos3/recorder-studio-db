@@ -150,6 +150,7 @@ class DatabaseServer:
             try:
                 self.state, self.error = "starting", None
                 await (self._start_postgres() if self.engine == "postgresql" else self._start_mariadb())
+                await self._check_tcp()
                 self.state = "running"
                 _LOGGER.info("%s is running", self.engine)
                 delay = 5
@@ -178,6 +179,18 @@ class DatabaseServer:
                 return
             await asyncio.sleep(1)
         raise RuntimeError(f"{self.engine} did not become ready within {START_TIMEOUT}s")
+
+    async def _check_tcp(self) -> None:
+        """Only report "running" once a real TCP login works (the way Home Assistant will connect), not just the local socket."""
+        last: Exception | None = None
+        for _ in range(30):
+            try:
+                await asyncio.to_thread(lambda: self.connect().close())
+                return
+            except Exception as err:  # noqa: BLE001
+                last = err
+                await asyncio.sleep(1)
+        raise RuntimeError(f"{self.engine} is up but refuses TCP logins: {last}")
 
     # ---- PostgreSQL ---------------------------------------------------
     async def _start_postgres(self) -> None:
