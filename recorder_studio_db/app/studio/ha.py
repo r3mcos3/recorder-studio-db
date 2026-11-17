@@ -63,6 +63,18 @@ class HAClient:
         self._reg[command] = (time.monotonic(), msg["result"])
         return msg["result"]
 
+    async def addon_hostname(self) -> str:
+        """The name Home Assistant Core uses to reach this add-on on the internal network."""
+        try:
+            async with self.session.get(f"{SUPERVISOR}/addons/self/info") as r:
+                if r.status == 200:
+                    return (await r.json())["data"]["hostname"]
+        except Exception:  # noqa: BLE001
+            pass
+        import socket
+
+        return socket.gethostname()
+
     async def backups(self) -> list[str]:
         async with self.session.get(f"{SUPERVISOR}/backups") as r:
             if r.status != 200:

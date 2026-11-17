@@ -1,5 +1,5 @@
 name: Recorder Studio DB
-version: "0.1.3"
+version: "0.2.0"
 slug: recorder_studio_db
 description: Run and manage the Home Assistant recorder database (SQLite, PostgreSQL or MariaDB) with Recorder Studio built in.
 url: https://github.com/r3mcos3/recorder-studio-db
@@ -9,6 +9,7 @@ arch:
 init: false
 startup: services
 boot: auto
+backup: cold
 homeassistant_api: true
 hassio_api: true
 hassio_role: backup
@@ -21,7 +22,9 @@ map:
   - homeassistant_config:rw
 options:
   engine: sqlite
+  sqlite_file: home-assistant_v2.db
   log_level: info
 schema:
   engine: list(sqlite|postgresql|mariadb)
+  sqlite_file: str
   log_level: list(debug|info|warning|error)

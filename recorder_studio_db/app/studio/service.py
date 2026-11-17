@@ -10,8 +10,9 @@ import time
 from typing import Any
 
 from . import store
-from .const import ATTR_REFRESH_SECONDS, CONFIG_DIR, CONFIG_FILE, GENERATED_FILE, LEGACY_FILE, STORE_FILE
-from .core import alerts, db_stats, history, suggestions, tree, yaml_writer
+from .const import ACTIVE_WINDOW, ATTR_REFRESH_SECONDS, CONFIG_DIR, CONFIG_FILE, DATA_DIR, DEFAULT_SQLITE_FILE, GENERATED_FILE, LEGACY_FILE, STORE_FILE, addon_options, sqlite_file
+from . import engines
+from .core import alerts, db_stats, db_stats_sql, history, suggestions, tree, yaml_writer
 from .ha import HAClient, HAError
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,8 +25,10 @@ ALERT_TEXT = {
 
 
 class Studio:
-    def __init__(self, ha: HAClient, config_dir: Path = CONFIG_DIR, store_path: Path = STORE_FILE) -> None:
+    def __init__(self, ha: HAClient, config_dir: Path = CONFIG_DIR, store_path: Path = STORE_FILE, server: engines.DatabaseServer | None = None) -> None:
         self.ha, self.config_dir, self.store_path = ha, Path(config_dir), Path(store_path)
+        self.server = server
+        self.backend = "sqlite"  # "sql" while Home Assistant writes into the add-on's PostgreSQL/MariaDB
         self.data: dict[str, Any] = store.load(self.store_path)
         self.pending_restart = False
         self.active_alerts: list[str] = []
@@ -54,7 +57,40 @@ class Studio:
 
     # ---- database ----------------------------------------------------
     def db_path(self) -> Path:
-        return db_stats.resolve_db_path(str(self.config_dir), None)
+        return self.config_dir / sqlite_file()
+
+    async def _uses_server(self) -> bool:
+        """True when Home Assistant is currently recording into the database server run by this add-on."""
+        if not (self.server and self.server.running):
+            return False
+
+        def probe():
+            conn = self.server.connect()
+            try:
+                return db_stats_sql.latest_ts(conn)
+            finally:
+                conn.close()
+
+        try:
+            ts = await asyncio.to_thread(probe)
+        except Exception:  # noqa: BLE001
+            return False
+        return ts is not None and time.time() - ts < ACTIVE_WINDOW
+
+    async def _collect(self, full: bool, attrs: bool) -> dict[str, Any]:
+        if await self._uses_server():
+            self.backend = "sql"
+            return await asyncio.to_thread(db_stats_sql.analyze, self.server.connect, self.server.dialect, self.server.label, full, attrs)
+        self.backend = "sqlite"
+        return await asyncio.to_thread(db_stats.analyze, self.db_path(), full, attrs)
+
+    async def target_url(self) -> str | None:
+        """The recorder db_url that matches the chosen engine (None = Home Assistant's default SQLite file)."""
+        engine = addon_options().get("engine", "sqlite")
+        if engine == "sqlite":
+            name = sqlite_file()
+            return None if name == DEFAULT_SQLITE_FILE else f"sqlite:////config/{name}"
+        return engines.build_db_url(engine, await self.ha.addon_hostname(), self.server.creds if self.server else engines.load_credentials())
 
     async def analyze(self, full: bool = True) -> dict[str, Any]:
         path = self.db_path()
@@ -64,7 +100,7 @@ class Studio:
         want_attrs = full and now - float(previous.get("attr_tried") or 0) > ATTR_REFRESH_SECONDS
         save = full
         try:
-            stats = await asyncio.to_thread(db_stats.analyze, path, full, want_attrs)
+            stats = await self._collect(full, want_attrs)
             if full:
                 stats["full_at"] = stats["generated_at"]
                 stats["attr_tried"] = now if want_attrs else previous.get("attr_tried")
@@ -148,7 +184,7 @@ class Studio:
     async def disk(self) -> tuple[int | None, int | None]:
         def _usage():
             try:
-                u = shutil.disk_usage(self.db_path().parent)
+                u = shutil.disk_usage(DATA_DIR if self.backend == "sql" else self.db_path().parent)
                 return u.total, u.free
             except OSError:
                 return None, None

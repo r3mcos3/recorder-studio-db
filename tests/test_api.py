@@ -92,3 +92,26 @@ async def test_ingress_only(aiohttp_client, studio, monkeypatch):
     app.on_startup.clear()
     c = await aiohttp_client(app)
     assert (await c.get("/")).status == 403
+
+
+async def test_db_status_sqlite_default(client):
+    status, body = await cmd(client, type="recorder_studio/db_status")
+    r = body["result"]
+    assert status == 200 and r["engine"] == "sqlite" and r["default_sqlite"] and r["configured"] and r["target_url"] is None
+
+
+async def test_db_activate_separate_sqlite_file(client, studio, monkeypatch):
+    monkeypatch.setattr("studio.service.sqlite_file", lambda: "recorder_studio.db")
+    monkeypatch.setattr("studio.api.sqlite_file", lambda: "recorder_studio.db")
+    status, body = await cmd(client, type="recorder_studio/db_activate", confirm=True)
+    assert status == 200
+    assert "db_url: sqlite:////config/recorder_studio.db" in (studio.config_dir / "recorder_studio.yaml").read_text()
+    status, body = await cmd(client, type="recorder_studio/db_status")
+    assert body["result"]["configured"] and body["result"]["current_url"] == "sqlite:////config/recorder_studio.db"
+    status, body = await cmd(client, type="recorder_studio/db_deactivate", confirm=True)
+    assert status == 200 and "db_url" not in (studio.config_dir / "recorder_studio.yaml").read_text()
+
+
+async def test_db_activate_needs_confirm(client):
+    status, body = await cmd(client, type="recorder_studio/db_activate")
+    assert status == 400 and body["code"] == "confirm_required"

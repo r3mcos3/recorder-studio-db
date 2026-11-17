@@ -10,6 +10,7 @@ from aiohttp import web
 
 from . import api
 from .const import ALERT_INTERVAL_HOURS, PORT, WWW_DIR, addon_options
+from . import engines
 from .ha import HAClient
 from .service import Studio
 
@@ -57,6 +58,8 @@ async def _background(app: web.Application) -> None:
 
 
 async def _start(app: web.Application) -> None:
+    if app["studio"].server:
+        await app["studio"].server.start()
     app["task"] = asyncio.create_task(_background(app))
 
 
@@ -66,13 +69,18 @@ async def _stop(app: web.Application) -> None:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+    if app["studio"].server:
+        await app["studio"].server.stop()
     await app["ha"].close()
 
 
 def make_app(studio: Studio | None = None, ha: HAClient | None = None) -> web.Application:
     ha = ha or HAClient()
     app = web.Application(middlewares=[only_ingress])
-    app["ha"], app["studio"] = ha, studio or Studio(ha)
+    if studio is None:
+        engine = addon_options().get("engine", "sqlite")
+        studio = Studio(ha, server=engines.DatabaseServer(engine) if engine in ("postgresql", "mariadb") else None)
+    app["ha"], app["studio"] = ha, studio
     app.router.add_post("/api/command", command)
     app.router.add_get("/", index)
     app.router.add_static("/", WWW_DIR, follow_symlinks=False)

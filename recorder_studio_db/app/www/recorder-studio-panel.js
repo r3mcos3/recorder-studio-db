@@ -43,6 +43,7 @@ const ALERT_NAMES = { disk_low: "Disk space is low", disk_filling: "The database
 const TABS = [
   ["overview", "Overview", "database"],
   ["entities", "Entities", "list"],
+  ["database", "Database", "database"],
   ["maintenance", "Maintenance", "broom"],
   ["orphans", "Orphans", "link"],
   ["migration", "Migration", "swap"],
@@ -54,6 +55,7 @@ class RecorderStudioPanel extends LitElement {
     hass: { attribute: false },
     narrow: { type: Boolean },
     _tab: { state: true },
+    _db: { state: true },
     _data: { state: true },
     _loading: { state: true },
     _error: { state: true },
@@ -79,6 +81,7 @@ class RecorderStudioPanel extends LitElement {
   constructor() {
     super();
     this._tab = "overview";
+    this._db = null;
     this._data = null;
     this._loading = true;
     this._search = "";
@@ -410,7 +413,7 @@ class RecorderStudioPanel extends LitElement {
 
       <nav role="tablist">
         ${TABS.map(
-          ([id, label, ic]) => html`<button role="tab" aria-selected=${this._tab === id} class=${classMap({ tab: true, on: this._tab === id })} @click=${() => { this._tab = id; if (id === "migration" && !this._sources) this._loadSources(); }}>
+          ([id, label, ic]) => html`<button role="tab" aria-selected=${this._tab === id} class=${classMap({ tab: true, on: this._tab === id })} @click=${() => { this._tab = id; if (id === "migration" && !this._sources) this._loadSources(); if (id === "database") this._loadDb(); }}>
             ${icon(ic, 18)}<span>${label}</span>${id === "orphans" && orphanCount ? html`<b class="badge">${orphanCount}</b>` : nothing}
           </button>`
         )}
@@ -424,7 +427,7 @@ class RecorderStudioPanel extends LitElement {
   }
 
   _renderTab() {
-    return { overview: () => this._tOverview(), entities: () => this._tEntities(), maintenance: () => this._tMaintenance(), orphans: () => this._tOrphans(), migration: () => this._tMigration(), settings: () => this._tSettings() }[this._tab]();
+    return { overview: () => this._tOverview(), entities: () => this._tEntities(), database: () => this._tDatabase(), maintenance: () => this._tMaintenance(), orphans: () => this._tOrphans(), migration: () => this._tMigration(), settings: () => this._tSettings() }[this._tab]();
   }
 
   /* ---------- Overview ---------- */
@@ -687,6 +690,60 @@ class RecorderStudioPanel extends LitElement {
   }
 
   /* ---------- Maintenance ---------- */
+  async _loadDb() {
+    const r = await this._run("db", () => this._ws("db_status"));
+    if (r) this._db = r;
+  }
+
+  _dbAction(kind) {
+    const on = kind === "activate";
+    const x = this._db;
+    const server = x.engine !== "sqlite";
+    this._confirm({
+      title: on ? "Use this database for the recorder" : "Back to the default SQLite database",
+      body: on
+        ? `The recorder will write to ${x.target_url || "the SQLite file " + x.sqlite_file} after the next Home Assistant restart.${server ? " It starts with an EMPTY history: your existing history stays in the old SQLite file (moving it is a later feature)." : ""}`
+        : "The db_url is removed from recorder_studio.yaml, so Home Assistant uses its default SQLite file again after the next restart.",
+      confirmLabel: on ? "Use it" : "Switch back",
+      danger: false,
+      onConfirm: async () => {
+        const r = await this._run("db", () => this._ws(on ? "db_activate" : "db_deactivate", { confirm: true }), { success: "Saved. Restart Home Assistant to apply." });
+        if (r) { await this._refresh(); await this._loadDb(); }
+      },
+    });
+  }
+
+  _tDatabase() {
+    const x = this._db;
+    if (!x) return html`<div class="card"><p class="muted">${this._busy === "db" ? "Loading…" : "No database information yet."}</p></div>`;
+    const names = { sqlite: "SQLite", postgresql: "PostgreSQL", mariadb: "MariaDB" };
+    const server = x.engine !== "sqlite";
+    const stateText = { running: "Running", starting: "Starting…", failed: "Failed", stopped: "Stopped" }[x.state] || x.state;
+    return html`
+      <div class="card">
+        <h3>Database engine <span class="muted">${names[x.engine]}${server ? " · experimental" : ""}</span></h3>
+        ${server ? html`
+          <p>Status: <b style=${`color:${x.state === "running" ? "var(--rs-ok)" : x.state === "failed" ? "var(--rs-err)" : "var(--rs-warn)"}`}>${stateText}</b>
+            ${x.version ? html` · version <b>${x.version}</b>` : nothing}
+            ${x.size_bytes != null ? html` · size <b>${fmtBytes(x.size_bytes)}</b>` : nothing}</p>
+          ${x.error ? html`<div class="banner warn">${icon("warn")}<span>${x.error}</span></div>` : nothing}
+          <p class="muted">Connection used by Home Assistant: <code>${x.target_url}</code></p>`
+        : html`<p>Home Assistant keeps writing to the SQLite file <code>${x.sqlite_file}</code>; this add-on only reads it.</p>`}
+        <p class="muted">Change the engine in the add-on <b>Configuration</b> tab (option <code>engine</code>${server ? "" : html`, and <code>sqlite_file</code> for a separate SQLite file`}), then restart the add-on.</p>
+      </div>
+      <div class="card">
+        <h3>Recorder</h3>
+        <p>${x.backend === "sql" ? html`${icon("check", 16)} Home Assistant is recording into this ${names[x.engine]} database right now.` : server ? "Home Assistant is not recording into this database yet." : "Home Assistant is recording into SQLite."}</p>
+        <p class="muted">${x.configured ? "recorder_studio.yaml points to this database." : x.current_url ? html`recorder_studio.yaml currently points to <code>${x.current_url}</code>.` : "recorder_studio.yaml has no db_url (Home Assistant's default SQLite file)."}</p>
+        ${x.pending_restart ? html`<div class="banner info">${icon("warn")}<span>A Home Assistant restart is needed to apply the change.</span></div>` : nothing}
+        <div class="row">
+          ${!x.configured ? html`<button class="btn primary" ?disabled=${this._ro || !!this._busy || (server && x.state !== "running")} @click=${() => this._dbAction("activate")}>${server ? "Use this database for the recorder…" : "Use this SQLite file for the recorder…"}</button>` : nothing}
+          ${x.current_url || !x.default_sqlite ? html`<button class="btn danger-o" ?disabled=${this._ro || !!this._busy} @click=${() => this._dbAction("deactivate")}>Back to default SQLite…</button>` : nothing}
+          <button class="btn" ?disabled=${!!this._busy} @click=${() => this._loadDb()}>Refresh</button>
+        </div>
+      </div>`;
+  }
+
   _tMaintenance() {
     const s = this._summary;
     const keep = this._data.options.purge_keep_days;

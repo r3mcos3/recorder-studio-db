@@ -6,10 +6,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .const import ADDON_VERSION, CONFIG_FILE, GENERATED_FILE, LEGACY_FILE, READ_ONLY_MODE, addon_options
+from .const import ADDON_VERSION, DEFAULT_SQLITE_FILE, addon_options, sqlite_file, CONFIG_FILE, GENERATED_FILE, LEGACY_FILE, READ_ONLY_MODE, addon_options
 from .core import db_stats, migration
 from .core.rules import parse_manual_rules
 from .core.yaml_writer import atomic_write
+from . import engines
 from .service import Studio
 
 
@@ -59,7 +60,8 @@ async def get_state(s: Studio, msg: dict) -> dict:
     return {
         "version": ADDON_VERSION,
         "engine": addon_options().get("engine", "sqlite"),
-        "db_files": await asyncio.to_thread(db_stats.file_sizes, s.db_path()),
+        "db_files": (d.get("stats") or {}).get("files") if s.backend == "sql" else await asyncio.to_thread(db_stats.file_sizes, s.db_path()),
+        "backend": s.backend,
         "sqlite": True,
         "options": d["options"],
         "rules_text": d["rules_text"],
@@ -281,6 +283,48 @@ async def migration_activate(s: Studio, msg: dict) -> dict:
     return {"backup": backup}
 
 
+async def db_status(s: Studio, msg: dict) -> dict:
+    engine = addon_options().get("engine", "sqlite")
+    info = await asyncio.to_thread(s.server.info) if s.server else {"engine": "sqlite", "state": "n/a", "error": None}
+    target = await s.target_url()
+    current = s.data["options"].get("db_url")
+    return {
+        **info,
+        "engine": engine,
+        "sqlite_file": sqlite_file(),
+        "backend": s.backend,
+        "target_url": engines.mask_url(target) if target else None,
+        "current_url": engines.mask_url(current) if current else None,
+        "configured": (current or None) == target,
+        "pending_restart": s.pending_restart,
+        "default_sqlite": sqlite_file() == DEFAULT_SQLITE_FILE,
+    }
+
+
+async def db_activate(s: Studio, msg: dict) -> dict:
+    """Point the recorder at the database chosen in the add-on options (written to recorder_studio.yaml, restart needed)."""
+    _need_write()
+    _need_confirm(msg)
+    if s.server and not s.server.running:
+        raise ApiError("db_not_running", "The database server is not running yet.")
+    target = await s.target_url()
+    if target:
+        s.data["options"]["db_url"] = target
+    else:
+        s.data["options"].pop("db_url", None)
+    await s.persist()
+    return {"configured": True}
+
+
+async def db_deactivate(s: Studio, msg: dict) -> dict:
+    """Back to Home Assistant's own default SQLite file."""
+    _need_write()
+    _need_confirm(msg)
+    s.data["options"].pop("db_url", None)
+    await s.persist()
+    return {"configured": False}
+
+
 COMMANDS = {f.__name__: f for f in (
     get_state, set_recorded, save_settings, analyze, preview_purge, purge, repack, restart, remove_orphans, save_alerts,
-    dismiss_suggestions, backup_status, migration_sources, migration_preview, migration_import, migration_activate)}
+    dismiss_suggestions, backup_status, db_status, db_activate, db_deactivate, migration_sources, migration_preview, migration_import, migration_activate)}
