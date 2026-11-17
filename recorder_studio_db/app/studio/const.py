@@ -2,8 +2,18 @@ import json
 import os
 from pathlib import Path
 
-ADDON_VERSION = "0.1.2"
-CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", "/config"))
+ADDON_VERSION = "0.1.3"
+def _config_dir() -> Path:
+    """`homeassistant_config` is mounted at /homeassistant (the add-on's own /config is a different folder)."""
+    if os.environ.get("CONFIG_DIR"):
+        return Path(os.environ["CONFIG_DIR"])
+    for cand in ("/homeassistant", "/config"):
+        if (Path(cand) / "configuration.yaml").exists():
+            return Path(cand)
+    return Path("/homeassistant")
+
+
+CONFIG_DIR = _config_dir()
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 OPTIONS_FILE = DATA_DIR / "options.json"
 STORE_FILE = DATA_DIR / "studio.json"
