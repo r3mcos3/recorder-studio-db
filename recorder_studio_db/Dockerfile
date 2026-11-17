@@ -5,7 +5,7 @@ RUN apk add --no-cache python3 py3-aiohttp py3-yaml py3-psycopg2 py3-pymysql su-
     postgresql postgresql-client mariadb mariadb-client
 
 # Alpine ships MariaDB with skip-networking; Home Assistant must reach it over TCP.
-RUN grep -rl "skip-networking" /etc/my.cnf.d /etc/mysql 2>/dev/null | xargs -r sed -i "s/^\s*skip-networking.*/# skip-networking disabled by Recorder Studio DB/"
+RUN sed -i "s/^[[:space:]]*skip-networking.*/# skip-networking disabled by Recorder Studio DB/" /etc/my.cnf.d/*.cnf
 
 COPY app /app
 COPY run.sh /run.sh
