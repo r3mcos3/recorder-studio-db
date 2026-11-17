@@ -17,3 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t recorder-studio-db recorder_studio_db
+      - name: Smoke test (server starts and serves the panel)
+        run: |
+          docker run -d --name rs -e STUDIO_DEV=1 -e DATA_DIR=/tmp/d -e CONFIG_DIR=/tmp/c -p 8099:8099 --entrypoint /run.sh recorder-studio-db
+          for i in $(seq 1 20); do curl -sf localhost:8099/ >/dev/null && break; sleep 1; done
+          curl -sf localhost:8099/ | grep -q recorder-studio-panel || { docker logs rs; exit 1; }
+          curl -sf -X POST localhost:8099/api/command -d '{"type":"recorder_studio/backup_status"}'

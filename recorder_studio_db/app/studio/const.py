@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-ADDON_VERSION = "0.1.0"
+ADDON_VERSION = "0.1.1"
 CONFIG_DIR = Path(os.environ.get("CONFIG_DIR", "/config"))
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 OPTIONS_FILE = DATA_DIR / "options.json"
