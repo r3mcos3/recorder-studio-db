@@ -70,14 +70,33 @@ def test_copy_into_real_server(dialect, connect, tmp_path):
 
     src = tmp_path / "src.db"
     build_source(src)
-    progress = hc.Progress()
+
+    class Hooked(hc.Progress):
+        """Home Assistant writes a row in the middle of the copy: it must not take an id the copy still needs."""
+
+        ha_ids: list = []
+
+        def __setattr__(self, name, value):
+            super().__setattr__(name, value)
+            if name == "done" and getattr(self, "step", "") == "states" and not Hooked.ha_ids:
+                other = connect()
+                c = other.cursor()
+                c.execute("INSERT INTO states (state, last_updated_ts) VALUES ('ha-live', 5000.0)")
+                c.execute("SELECT MAX(state_id) FROM states WHERE state = 'ha-live'")
+                Hooked.ha_ids.append(c.fetchone()[0])
+                other.commit()
+                other.close()
+
+    Hooked.ha_ids = []
+    progress = Hooked()
     copied = hc.copy_history(str(src), connect, dialect, progress, batch=2)
+    assert Hooked.ha_ids and Hooked.ha_ids[0] > hc.MARGIN  # it landed after the reserved range, not in the middle of it
     assert copied["states"] == 3 and progress.done == progress.total
 
     conn = connect()
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM states")
-    assert cur.fetchone()[0] == 3
+    assert cur.fetchone()[0] == 4  # 3 copied + the row written during the copy
     cur.execute("SELECT COUNT(*) FROM states_meta")
     assert cur.fetchone()[0] == 2  # sensor.a reused, sensor.b added
     cur.execute("SELECT s.state, o.state FROM states s LEFT JOIN states o ON o.state_id = s.old_state_id WHERE s.state = '2'")
@@ -91,5 +110,5 @@ def test_copy_into_real_server(dialect, connect, tmp_path):
     cur.execute("INSERT INTO states (state, last_updated_ts) VALUES ('later', 1000.0)")
     conn.commit()
     cur.execute("SELECT COUNT(*) FROM states")
-    assert cur.fetchone()[0] == 4
+    assert cur.fetchone()[0] == 5
     conn.close()

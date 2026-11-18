@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+- Fix: copying history failed with `Duplicate entry ... for key 'PRIMARY'` while Home Assistant was recording into the same database (Home Assistant took ids the copy still needed). The id range is now reserved up front.
+- A failed copy now removes everything it inserted, so you can simply try again.
+
 ## 0.4.0
 - New: **Copy history** (Database tab). Copies the history of a SQLite file (states, events, statistics) into the add-on's PostgreSQL/MariaDB, so graphs and statistics continue after switching.
 - The SQLite source is only read and stays untouched as your backup. Home Assistant may keep recording while copying; existing rows are never overwritten.

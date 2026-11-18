@@ -2,8 +2,9 @@
 
 Design (so Home Assistant may keep writing while we copy):
 * The source is opened read-only and is never changed: it stays as the backup.
-* Rows whose ids are only referenced inside the copied data get the old id + an offset that is larger than anything
-  the target holds, so they can never collide with rows Home Assistant is writing at the same time.
+* Copied rows get their old id + an offset that is larger than anything the target holds. The whole id range is
+  reserved up front (auto-increment / sequence moved past it), so rows Home Assistant writes meanwhile can never take an id we need.
+* If the copy fails, everything it inserted is removed again (it lives in its own id range), so a retry starts clean.
 * Small lookup tables (states_meta, event_types, statistics_meta) are merged by name instead.
 * Only real columns are copied; the legacy text columns of old schemas are skipped.
 """
@@ -89,6 +90,28 @@ def _max_id(cur, table: str, pk: str) -> int:
     return int(cur.fetchone()[0])
 
 
+def _reserve(cur, dialect: str, table: str, pk: str, next_id: int) -> None:
+    """Move the id counter of the target past the range we are going to fill."""
+    if dialect == "postgresql":
+        cur.execute(f"SELECT setval(pg_get_serial_sequence('{table}', '{pk}'), %s)", (next_id,))
+    elif dialect == "mariadb":
+        cur.execute(f"ALTER TABLE {table} AUTO_INCREMENT = {int(next_id)}")
+
+
+def _rollback(conn, dialect: str, ranges: dict[str, tuple[str, int, int]]) -> None:
+    """Remove what a failed copy inserted (children first). Never raises."""
+    try:
+        conn.rollback()
+        cur = conn.cursor()
+        for table in ("events", "states", "event_data", "state_attributes", "statistics_short_term", "statistics"):
+            if table in ranges:
+                pk, low, high = ranges[table]
+                cur.execute(f"DELETE FROM {table} WHERE {pk} > {low} AND {pk} <= {high}")
+                conn.commit()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _merge_lookup(src: sqlite3.Connection, cur, dialect: str, table: str, pk: str, key: str, extra: list[str]) -> dict[int, int]:
     """Copy a small lookup table by its natural key; returns old id -> id in the target."""
     ph = _placeholder(dialect)
@@ -119,6 +142,7 @@ def copy_history(source_path: str, connect: Callable[[], Any], dialect: str, pro
     src = sqlite3.connect(f"file:{source_path}?mode=ro", uri=True)
     conn = connect()
     copied: dict[str, int] = {}
+    ranges: dict[str, tuple[str, int, int]] = {}
     try:
         cur = conn.cursor()
         have = {t for t in TABLES if _table_columns(cur, dialect, t)}
@@ -136,7 +160,14 @@ def copy_history(source_path: str, connect: Callable[[], Any], dialect: str, pro
             target_cols = _table_columns(cur, dialect, t)
             src_cols = {r[1] for r in src.execute(f"PRAGMA table_info({t})")}
             cols_of[t] = [c for c in TABLES[t][1] if c in target_cols and c in src_cols]
-        offsets = {t: _max_id(cur, t, TABLES[t][0]) + MARGIN for t in todo}
+        id_tables = [t for t in ("state_attributes", "event_data", "states", "events", "statistics", "statistics_short_term") if t in todo]
+        offsets = {t: _max_id(cur, t, TABLES[t][0]) + MARGIN for t in id_tables}
+        for t in id_tables:
+            pk = TABLES[t][0]
+            top = offsets[t] + int(src.execute(f"SELECT COALESCE(MAX({pk}), 0) FROM {t}").fetchone()[0])
+            ranges[t] = (pk, offsets[t], top)
+            _reserve(cur, dialect, t, pk, top + 1)
+        conn.commit()
 
         def tick(table: str, n: int) -> None:
             progress.done += n
@@ -230,15 +261,17 @@ def copy_history(source_path: str, connect: Callable[[], Any], dialect: str, pro
         for table in ("statistics", "statistics_short_term"):
             if table in todo:
                 cols = cols_of[table]
-                mi = cols.index("metadata_id")
+                mi = cols.index("metadata_id") + 1
+                so = offsets[table]
 
-                def fix_stat(r: tuple, mi=mi) -> tuple:
+                def fix_stat(r: tuple, mi=mi, so=so) -> tuple:
                     v = list(r)
+                    v[0] += so
                     v[mi] = stat_map.get(v[mi])
                     return tuple(v)
 
                 # the unique (metadata_id, start_ts) index makes rows Home Assistant already holds a harmless duplicate
-                bulk(table, f"SELECT {', '.join(cols)} FROM {table} WHERE metadata_id IS NOT NULL ORDER BY id", fix_stat, cols, ignore=True)
+                bulk(table, f"SELECT id, {', '.join(cols)} FROM {table} WHERE metadata_id IS NOT NULL ORDER BY id", fix_stat, ["id"] + cols, ignore=True)
 
         if dialect == "postgresql":
             progress.step = "sequences"
@@ -247,6 +280,9 @@ def copy_history(source_path: str, connect: Callable[[], Any], dialect: str, pro
                 cur.execute(f"SELECT setval(pg_get_serial_sequence('{t}', '{pk}'), (SELECT COALESCE(MAX({pk}), 1) FROM {t}))")
             conn.commit()
         return copied
+    except BaseException:
+        _rollback(conn, dialect, ranges)
+        raise
     finally:
         src.close()
         conn.close()

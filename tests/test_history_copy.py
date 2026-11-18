@@ -123,3 +123,22 @@ def test_run_reports_errors_instead_of_raising(tmp_path):
     p = hc.Progress()
     hc.run(str(src), lambda: sqlite3.connect(empty), "sqlite", p)
     assert p.state == "error" and "Home Assistant tables" in p.error and p.finished
+
+
+def test_failed_copy_removes_what_it_inserted(tmp_path):
+    src, dst = tmp_path / "src.db", tmp_path / "dst.db"
+    build_source(src)
+    build_target(dst)
+    c = sqlite3.connect(dst)
+    c.execute("CREATE TRIGGER boom BEFORE INSERT ON events BEGIN SELECT RAISE(ABORT, 'boom'); END")
+    c.commit()
+    c.close()
+    before = {t: sqlite3.connect(dst).execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("states", "state_attributes", "statistics")}
+    with pytest.raises(sqlite3.Error):
+        hc.copy_history(str(src), lambda: sqlite3.connect(dst), "sqlite", batch=2)
+    c = sqlite3.connect(dst)
+    for t, n in before.items():
+        assert c.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] == n  # the copy left nothing behind, Home Assistant's rows stay
+    p = hc.Progress()
+    hc.run(str(src), lambda: sqlite3.connect(dst), "sqlite", p)
+    assert p.state == "error" and "boom" in p.error
