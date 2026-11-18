@@ -203,6 +203,16 @@ class RecorderStudioPanel extends LitElement {
     }
   }
 
+  /** What to tell the user after a save, based on the live-apply result of the backend. */
+  _liveText(live, lead = "Saved.") {
+    if (live?.applied && !live.restart?.length) return `${lead} Applied, no restart needed.`;
+    if (live?.reason === "integration_missing") return `${lead} Install the Recorder Studio integration to apply this without a restart; for now restart Home Assistant.`;
+    const keys = (live?.restart || []).filter((k) => k !== "all");
+    if (keys.includes("configuration")) return `${lead} Restart once so Home Assistant starts using recorder_studio.yaml.`;
+    if (keys.length) return `${lead} Applied, except ${keys.join(" and ")}: that needs a restart.`;
+    return `${lead} Restart Home Assistant to apply.`;
+  }
+
   _notify(text, kind = "ok") {
     this._toast = { text, kind };
     clearTimeout(this._toastTimer);
@@ -236,15 +246,16 @@ class RecorderStudioPanel extends LitElement {
   async _savePending() {
     const on = [...this._pending].filter(([, v]) => v).map(([k]) => k);
     const off = [...this._pending].filter(([, v]) => !v).map(([k]) => k);
+    let live;
     await this._run(
       "save",
       async () => {
-        if (on.length) await this._ws("set_recorded", { entity_ids: on, recorded: true });
-        if (off.length) await this._ws("set_recorded", { entity_ids: off, recorded: false });
+        if (on.length) live = (await this._ws("set_recorded", { entity_ids: on, recorded: true })).live;
+        if (off.length) live = (await this._ws("set_recorded", { entity_ids: off, recorded: false })).live;
         this._pending = new Map();
         await this._refresh();
       },
-      { success: `Saved ${on.length + off.length} change(s). Restart Home Assistant to apply.` }
+      { success: () => this._liveText(live, `Saved ${on.length + off.length} change(s).`) }
     );
   }
 
@@ -412,7 +423,7 @@ class RecorderStudioPanel extends LitElement {
       ${d.read_only ? html`<div class="banner info">${icon("check")}<span><b>Read-only mode.</b> Statistics and the entity list work; saving, purging, repacking, restarting and migration are disabled.</span></div>` : nothing}
       ${d.sqlite === false ? html`<div class="banner error">${icon("warn")} The recorder does not use SQLite. This integration only supports SQLite.</div>` : nothing}
       ${d.pending_restart && !d.read_only
-        ? html`<div class="banner warn">${icon("warn")}<span>Changes are saved to <code>${d.yaml_file}</code> but only apply after a restart.</span>
+        ? html`<div class="banner warn">${icon("warn")}<span>${d.live?.reason === "integration_missing" ? html`Changes are saved to <code>${d.yaml_file}</code>. Install the <b>Recorder Studio</b> integration to apply them without a restart; for now they apply after a restart.` : d.live?.restart?.length && !d.live.restart.includes("all") && !d.live.restart.includes("configuration") ? html`Applied, except <b>${d.live.restart.join(" and ")}</b>: that only takes effect after a restart.` : html`Changes are saved to <code>${d.yaml_file}</code> but only apply after a restart.`}</span>
             <button class="btn small" @click=${this._askRestart}>${icon("power", 16)} Restart</button></div>`
         : nothing}
       ${d.config.state !== "active" && !d.read_only
@@ -529,7 +540,7 @@ class RecorderStudioPanel extends LitElement {
             ${safe.length ? html`<button class="btn" ?disabled=${this._ro} @click=${() => this._toggle(safe.map((i) => i.entity_id), false)}>Exclude the ${safe.length} without warning</button>` : nothing}
             ${sg.dismissed ? html`<button class="btn ghost" ?disabled=${this._ro || !!this._busy} @click=${() => this._dismiss([], true)}>Show ${sg.dismissed} hidden again</button>` : nothing}
           </div>
-          <p class="muted">Excluding is saved with the bar at the bottom; Home Assistant needs a restart to apply it.</p>`
+          <p class="muted">Excluding is saved with the bar at the bottom and applies right away (with the Recorder Studio integration installed), without a restart.</p>`
         : html`<p class="muted">${icon("check", 16)} Nothing stands out right now. ${sg.dismissed ? html`<button class="link" @click=${() => this._dismiss([], true)}>Show ${sg.dismissed} hidden</button>` : nothing}</p>`}
     </section>`;
   }
@@ -858,7 +869,7 @@ class RecorderStudioPanel extends LitElement {
         ${this._action("Purge by retention", `Delete history older than ${keep} days for all entities (the retention setting).`, "Purge…", () => this._askPurge("retention"), true)}
         ${this._action("Purge excluded entities", `Delete the entire history of ${fmtNum(excludedIds.length)} excluded entities${s ? ` (${fmtNum(s.obsolete_records)} records)` : ""}. Ignores retention.`, "Purge excluded…", () => this._askPurge("excluded"), true, !s ? "Analyse the database first" : "")}
         ${this._action("Repack database", "Rewrite the SQLite file to reclaim disk space after large purges.", "Repack…", () => this._askRepack())}
-        ${this._action("Restart Home Assistant", "Needed to apply recorder configuration changes.", "Restart…", () => this._askRestart())}
+        ${this._action("Restart Home Assistant", "Only needed for the database URL, the commit interval and the first activation; other changes apply live.", "Restart…", () => this._askRestart())}
       </div>`;
   }
   _action(title, text, label, fn, danger = false, disabledReason = "") {
@@ -875,7 +886,7 @@ class RecorderStudioPanel extends LitElement {
       <h2>${list.length} orphaned exclusion${list.length > 1 ? "s" : ""}</h2>
       <p class="muted">These entities are excluded but no longer exist in Home Assistant and have no history. Removing them tidies <code>${this._data.yaml_file}</code>.</p>
       <ul class="plain">${list.map((id) => html`<li><code>${id}</code></li>`)}</ul>
-      <button class="btn danger-o" ?disabled=${this._ro} @click=${() => this._confirm({ title: "Remove orphaned exclusions", body: `${list.length} entries will be removed from the exclusion list. Nothing is deleted from the database.`, confirmLabel: "Remove", onConfirm: () => this._run("orph", async () => { await this._ws("remove_orphans"); await this._refresh(); }, { success: "Removed. Restart to apply." }) })}>${icon("trash", 18)} Remove all ${list.length}</button>
+      <button class="btn danger-o" ?disabled=${this._ro} @click=${() => this._confirm({ title: "Remove orphaned exclusions", body: `${list.length} entries will be removed from the exclusion list. Nothing is deleted from the database.`, confirmLabel: "Remove", onConfirm: () => { let live; return this._run("orph", async () => { live = (await this._ws("remove_orphans")).live; await this._refresh(); }, { success: () => this._liveText(live, "Removed.") }); } })}>${icon("trash", 18)} Remove all ${list.length}</button>
     </div>`;
   }
 
@@ -964,7 +975,7 @@ class RecorderStudioPanel extends LitElement {
       <h2>Manual rules</h2>
       <p class="muted">Optional YAML for domain, glob and event-type rules. Individual entities are managed on the Entities tab.</p>
       <textarea rows="7" spellcheck="false" placeholder="exclude:\n  entity_globs:\n    - sensor.*_uptime" .value=${f.rules_text} @input=${(e) => set("rules_text", e.target.value)}></textarea>
-      <div class="row"><button class="btn primary" ?disabled=${this._ro || !dirty || !!this._busy} @click=${() => this._run("save", async () => { await this._ws("save_settings", { ...f }); await this._refresh(); }, { success: "Settings saved. Restart to apply." })}>Save settings</button>
+      <div class="row"><button class="btn primary" ?disabled=${this._ro || !dirty || !!this._busy} @click=${() => { let live; return this._run("save", async () => { live = (await this._ws("save_settings", { ...f })).live; await this._refresh(); }, { success: () => this._liveText(live, "Settings saved.") }); }}>Save settings</button>
       <button class="btn" ?disabled=${!dirty} @click=${() => (this._form = { ...this._data.options, rules_text: this._data.rules_text })}>Reset</button></div>
     </div>
     ${this._alertForm ? this._alertsCard() : nothing}

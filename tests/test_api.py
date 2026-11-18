@@ -8,6 +8,7 @@ from studio.service import Studio
 class FakeHA:
     def __init__(self):
         self.calls = []
+        self.live_result = {"applied": True, "restart": [], "changed": ["filter"], "reason": None}  # what recorder_studio.apply_config answers
 
     async def ws(self, command):
         if command == "config/entity_registry/list":
@@ -16,6 +17,14 @@ class FakeHA:
 
     async def states(self):
         return [{"entity_id": "sensor.a", "attributes": {}}, {"entity_id": "sensor.b_uptime", "attributes": {}}]
+
+    async def call_service_response(self, domain, service, data=None):
+        from studio.ha import HAError
+
+        self.calls.append((domain, service, data))
+        if isinstance(self.live_result, Exception):
+            raise self.live_result
+        return self.live_result
 
     async def call_service(self, domain, service, data=None):
         self.calls.append((domain, service, data or {}))
@@ -66,6 +75,25 @@ async def test_set_recorded_writes_yaml(client, studio):
     assert status == 200 and body["result"]["excluded"] == 1
     yaml_text = (studio.config_dir / "recorder_studio.yaml").read_text()
     assert "sensor.b_uptime" in yaml_text
+    assert body["result"]["live"]["applied"] is True
+    assert ("recorder_studio", "apply_config", None) in studio.ha.calls
+    assert not studio.pending_restart  # applied to the running recorder: no restart
+
+
+async def test_changes_needing_a_restart_keep_the_banner(client, studio):
+    studio.ha.live_result = {"applied": True, "restart": ["db_url"], "changed": [], "reason": None}
+    await cmd(client, type="recorder_studio/set_recorded", entity_ids=["sensor.b_uptime"], recorded=False)
+    assert studio.pending_restart
+    status, body = await cmd(client, type="recorder_studio/get_state")
+    assert body["result"]["pending_restart"] is True and body["result"]["live"]["restart"] == ["db_url"]
+
+
+async def test_without_the_integration_a_restart_is_needed(client, studio):
+    from studio.ha import HAError
+
+    studio.ha.live_result = HAError("recorder_studio.apply_config: service not found")
+    status, body = await cmd(client, type="recorder_studio/set_recorded", entity_ids=["sensor.b_uptime"], recorded=False)
+    assert status == 200 and body["result"]["live"]["reason"] == "integration_missing"
     assert studio.pending_restart
 
 

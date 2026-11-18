@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+- **No more restarts for most changes.** Excluding entities, retention (`purge_keep_days`), auto purge and auto repack are applied to the running recorder right after you save. Only the database URL, the commit interval and the very first activation still need a Home Assistant restart; the panel says exactly which.
+- This needs the **Recorder Studio integration 0.5.0 or newer** (Marketplace / HACS) next to the add-on; it provides the service `recorder_studio.apply_config`. It also works when the recorder uses PostgreSQL/MariaDB. Without it the add-on behaves as before (restart needed) and says so.
+
 ## 0.4.1
 - Fix: copying history failed with `Duplicate entry ... for key 'PRIMARY'` while Home Assistant was recording into the same database (Home Assistant took ids the copy still needed). The id range is now reserved up front.
 - A failed copy now removes everything it inserted, so you can simply try again.

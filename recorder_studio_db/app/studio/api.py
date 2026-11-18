@@ -72,6 +72,7 @@ async def get_state(s: Studio, msg: dict) -> dict:
         "alerts": {**d["alerts"], "active": s.active_alerts},
         "config": await _config_info(s),
         "pending_restart": s.pending_restart,
+        "live": s.live,
         "yaml_file": GENERATED_FILE,
         "read_only": READ_ONLY_MODE,
     }
@@ -86,8 +87,8 @@ async def set_recorded(s: Studio, msg: dict) -> dict:
     d["excluded_entities"] = sorted(current - ids if recorded else current | ids)
     if not recorded:
         d["rescued_entities"] = sorted(set(d["rescued_entities"]) - ids)
-    await s.persist()
-    return {"excluded": len(d["excluded_entities"]), "summary": s.summary()}
+    live = await s.persist()
+    return {"excluded": len(d["excluded_entities"]), "summary": s.summary(), "live": live}
 
 
 async def save_settings(s: Studio, msg: dict) -> dict:
@@ -104,8 +105,8 @@ async def save_settings(s: Studio, msg: dict) -> dict:
         raise ApiError("invalid_rules", str(err)) from None
     s.data["options"].update(opts)
     s.data["rules_text"] = msg["rules_text"]
-    await s.persist()
-    return {"ok": True}
+    live = await s.persist()
+    return {"ok": True, "live": live}
 
 
 async def analyze(s: Studio, msg: dict) -> dict:
@@ -167,8 +168,8 @@ async def remove_orphans(s: Studio, msg: dict) -> dict:
     d = s.data
     d["excluded_entities"] = sorted(set(d["excluded_entities"]) - orphans)
     d["rescued_entities"] = sorted(set(d["rescued_entities"]) - orphans)
-    await s.persist()
-    return {"removed": len(orphans), "summary": s.summary()}
+    live = await s.persist()
+    return {"removed": len(orphans), "summary": s.summary(), "live": live}
 
 
 async def save_alerts(s: Studio, msg: dict) -> dict:
@@ -260,8 +261,8 @@ async def migration_import(s: Studio, msg: dict) -> dict:
     else:
         d["options"].update(imp["options"])
         d["excluded_entities"], d["rescued_entities"], d["rules_text"] = imp["excluded_entities"], imp["rescued_entities"], imp["rules_text"]
-    await s.persist()
-    return {"warnings": warnings, "excluded": len(d["excluded_entities"])}
+    live = await s.persist()
+    return {"warnings": warnings, "excluded": len(d["excluded_entities"]), "live": live}
 
 
 def _activate_files(config_path: Path) -> str:
@@ -323,8 +324,8 @@ async def db_activate(s: Studio, msg: dict) -> dict:
         s.data["options"]["db_url"] = target
     else:
         s.data["options"].pop("db_url", None)
-    await s.persist()
-    return {"configured": True}
+    live = await s.persist()
+    return {"configured": True, "live": live}
 
 
 async def db_deactivate(s: Studio, msg: dict) -> dict:
@@ -332,8 +333,8 @@ async def db_deactivate(s: Studio, msg: dict) -> dict:
     _need_write()
     _need_confirm(msg)
     s.data["options"].pop("db_url", None)
-    await s.persist()
-    return {"configured": False}
+    live = await s.persist()
+    return {"configured": False, "live": live}
 
 
 async def history_status(s: Studio, msg: dict) -> dict:

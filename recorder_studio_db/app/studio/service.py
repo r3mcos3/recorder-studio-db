@@ -34,6 +34,7 @@ class Studio:
         if isinstance(url, str) and url.startswith("mysql+pymysql://"):  # 0.3.0 wrote a driver Home Assistant does not ship
             self.data["options"]["db_url"] = "mysql://" + url[len("mysql+pymysql://"):]
         self.pending_restart = False
+        self.live: dict[str, Any] | None = None
         self.copy_progress = history_copy.Progress()
         self._copy_task: asyncio.Task | None = None
         self.active_alerts: list[str] = []
@@ -54,11 +55,28 @@ class Studio:
         content = yaml_writer.render_yaml(d["options"], d["excluded_entities"], d["rescued_entities"], d["rules_text"])
         await asyncio.to_thread(yaml_writer.atomic_write, self.generated_path(), content)
 
-    async def persist(self) -> None:
-        """Save our settings and regenerate the YAML file (a Home Assistant restart applies it)."""
+    async def persist(self) -> dict[str, Any]:
+        """Save our settings, regenerate the YAML file and have Home Assistant apply it to the running recorder.
+
+        That needs the Recorder Studio integration (service recorder_studio.apply_config). Without it, or for settings the
+        recorder reads at start-up only (db_url, commit_interval), a Home Assistant restart is still needed.
+        """
         await self.save()
         await self.write_yaml()
-        self.pending_restart = True
+        return await self.apply_live()
+
+    async def apply_live(self) -> dict[str, Any]:
+        try:
+            result = await self.ha.call_service_response("recorder_studio", "apply_config")
+            if not isinstance(result, dict):
+                raise HAError("no response from recorder_studio.apply_config")
+        except HAError as err:
+            _LOGGER.info("Live apply not possible (%s); a Home Assistant restart is needed", err)
+            reason = "integration_missing" if "not found" in str(err) else str(err)
+            result = {"applied": False, "restart": ["all"], "changed": [], "reason": reason}
+        self.live = result
+        self.pending_restart = bool(result.get("restart"))
+        return result
 
     # ---- database ----------------------------------------------------
     @property

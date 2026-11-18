@@ -24,6 +24,14 @@ several minutes; the panel shows the progress. To go back, use *Back to default 
 
 The database lives in the add-on's data folder. Add-on backups stop the add-on first, so the copy is consistent.
 
+## Changes without a restart
+
+Install the **Recorder Studio** integration (version 0.5.0 or newer) as well. After you save, the add-on writes
+`recorder_studio.yaml` and calls its service `recorder_studio.apply_config`, which updates the running recorder:
+entity filter, retention, auto purge and auto repack apply immediately. A restart is only needed for the database URL,
+the commit interval and the first time `configuration.yaml` is pointed at `recorder_studio.yaml`. The panel shows when.
+Without the integration every change needs a restart, as before.
+
 ## Safety
 
 The add-on only reads your SQLite database. Purging and repacking go through Home Assistant's own recorder services
