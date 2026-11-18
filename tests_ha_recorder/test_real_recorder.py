@@ -59,6 +59,7 @@ async def test_events_during_a_pause_are_written_after_the_resume(recorder_mock,
     hass.states.async_set("sensor.during", "2")
     await hass.async_block_till_done()
     assert (await pause.async_resume(hass))["resumed"] is True
+    pause.release_now(hass)  # also ends the short "hide connection errors" timer that follows a resume
     await async_wait_recording_done(hass)
 
     def recorded() -> set:
