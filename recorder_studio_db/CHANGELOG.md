@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1
+- Fix: MariaDB URL now uses `mysql://` (the `mysqlclient` driver Home Assistant ships). `mysql+pymysql://` made the recorder fail with `No module named 'pymysql'`. If you already activated MariaDB, click **Use this database for the recorder** again (or deactivate) and restart HA.
+
 ## 0.3.0
 - Choose the database engine (SQLite, PostgreSQL, MariaDB) and the SQLite file from the **Database** tab; no add-on restart needed. The add-on option `engine` is only the starting value.
 - The add-on refuses to stop the database server Home Assistant is recording into.

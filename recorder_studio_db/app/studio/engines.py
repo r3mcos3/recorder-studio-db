@@ -58,7 +58,7 @@ def build_db_url(engine: str, host: str, creds: dict[str, str]) -> str:
     user, pw, db = quote(creds["user"], safe=""), quote(creds["password"], safe=""), quote(creds["database"], safe="")
     if engine == "postgresql":
         return f"postgresql://{user}:{pw}@{host}:5432/{db}"
-    return f"mysql+pymysql://{user}:{pw}@{host}:3306/{db}?charset=utf8mb4"
+    return f"mysql://{user}:{pw}@{host}:3306/{db}?charset=utf8mb4"
 
 
 def mask_url(url: str) -> str:

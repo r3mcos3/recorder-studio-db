@@ -16,7 +16,7 @@ def test_db_urls_and_masking():
     pg = engines.build_db_url("postgresql", "abc-recorder-studio-db", creds)
     assert pg == "postgresql://homeassistant:p%40ss%2Fw%3Ard@abc-recorder-studio-db:5432/homeassistant"
     my = engines.build_db_url("mariadb", "h", creds)
-    assert my.startswith("mysql+pymysql://") and my.endswith(":3306/homeassistant?charset=utf8mb4")
+    assert my.startswith("mysql://") and my.endswith(":3306/homeassistant?charset=utf8mb4")
     assert "p%40ss" not in engines.mask_url(pg) and "***" in engines.mask_url(pg)
     assert engines.mask_url("sqlite:////config/x.db") == "sqlite:////config/x.db"
 
