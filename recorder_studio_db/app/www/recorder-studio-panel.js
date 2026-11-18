@@ -902,7 +902,7 @@ class RecorderStudioPanel extends LitElement {
     const stateText = { running: "Running", starting: "Starting…", failed: "Failed", stopped: "Stopped" }[x.state] || x.state;
     return html`
       <div class="card">
-        <h3>Database engine <span class="muted">${names[x.engine]}${server ? " · experimental" : ""}</span></h3>
+        <h3>Database engine <span class="muted">${names[x.engine]}</span></h3>
         ${server ? html`
           <p>Status: <b style=${`color:${x.state === "running" ? "var(--rs-ok)" : x.state === "failed" ? "var(--rs-err)" : "var(--rs-warn)"}`}>${stateText}</b>
             ${x.version ? html` · version <b>${x.version}</b>` : nothing}
@@ -913,7 +913,7 @@ class RecorderStudioPanel extends LitElement {
         <div class="row" style="align-items:center;flex-wrap:wrap;gap:8px">
           <label>Engine
             <select .value=${this._dbEngine} @change=${(e) => (this._dbEngine = e.target.value)}>
-              ${x.engines.map((id) => html`<option value=${id} ?selected=${id === this._dbEngine}>${names[id]}${id === "sqlite" ? "" : " (experimental)"}</option>`)}
+              ${x.engines.map((id) => html`<option value=${id} ?selected=${id === this._dbEngine}>${names[id]}</option>`)}
             </select>
           </label>
           ${this._dbEngine === "sqlite" ? html`<label>SQLite file <input type="text" .value=${this._dbFile} @input=${(e) => (this._dbFile = e.target.value)} /></label>` : nothing}

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.3
+- PostgreSQL is no longer labelled experimental. It was tested on a real Home Assistant: recording, live apply without a restart, an add-on restart without losing a value (240 of 240), copying 2.8 million rows of history (statistics identical to the source), all 16 sensors and a repack (VACUUM FULL).
+- PostgreSQL log: the start check no longer logs `FATAL: role "root" does not exist` (cosmetic, it was only the readiness probe).
+
 ## 0.8.2
 - **Integration 0.8.1: restart Home Assistant once** after updating. The integration now resolves the `!secret` in `recorder_studio.yaml` (Home Assistant's YAML loader only does that when it is given the secrets of the config folder); without this, changes would have asked for a restart every time.
 - **The database password no longer sits in `recorder_studio.yaml`.** That file is often under version control. The add-on now stores the URL in your `secrets.yaml` (key `recorder_studio_db_url`) and writes `db_url: !secret recorder_studio_db_url`. An existing plain-text password is moved automatically when the add-on starts; only that one line of `recorder_studio.yaml` is changed.

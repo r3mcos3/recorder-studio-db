@@ -220,7 +220,7 @@ class DatabaseServer:
             "su-exec", "postgres", postgres, "-D", str(PG_DATA), "-c", "listen_addresses=*", "-c", f"unix_socket_directories={PG_SOCK}",
         )
         pg_isready = find_binary("pg_isready") or "pg_isready"
-        await self._wait_ready([pg_isready, "-h", PG_SOCK, "-q"])
+        await self._wait_ready([pg_isready, "-h", PG_SOCK, "-U", "postgres", "-q"])
         psql = find_binary("psql") or "psql"
         base = ["su-exec", "postgres", psql, "-h", PG_SOCK, "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1"]
         pw = self.creds["password"]

@@ -45,9 +45,9 @@ Home Assistant > Settings > Add-ons > Add-on store > ⋮ > Repositories, add `ht
 
 ## Status
 
-Experimental. It runs on the author's Home Assistant with MariaDB. PostgreSQL is tested against a real server in CI (start,
-restart, engine switch, history copy) but has not been run on a real Home Assistant. Home Assistant OS / Supervised only.
-Live apply and the recorder pause use recorder internals (Home Assistant has no API for it); every step is guarded and falls
+New, so reports are welcome. MariaDB and PostgreSQL have both been run on a real Home Assistant with the full chain: recording,
+live apply, restart of the add-on without losing history, copying a 2.8 million row history, the sensors and a repack.
+Home Assistant OS / Supervised only. Live apply and the recorder pause use recorder internals (Home Assistant has no API for it); every step is guarded and falls
 back to asking for a restart.
 
 Use either this add-on **or** the [Recorder Studio integration](https://github.com/r3mcos3/recorder-studio) to manage
