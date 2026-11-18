@@ -22,6 +22,14 @@
           "description": "Sensor key to value."
         }
       }
+    },
+    "pause_recorder": {
+      "name": "Pause recorder",
+      "description": "Used by the add-on before it restarts the database on purpose: the recorder waits and keeps events in memory. It continues by itself after 3 minutes."
+    },
+    "resume_recorder": {
+      "name": "Resume recorder",
+      "description": "Lets the recorder continue after a pause (used by the add-on once the database is back)."
     }
   },
   "entity": {

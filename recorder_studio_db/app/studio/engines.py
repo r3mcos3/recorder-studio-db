@@ -84,6 +84,8 @@ class DatabaseServer:
         self._proc: asyncio.subprocess.Process | None = None
         self._task: asyncio.Task | None = None
         self._stopping = False
+        self.on_ready = None  # async callable, awaited (as a task) every time the server reaches "running"
+        self._ready_task: asyncio.Task | None = None
 
     @property
     def running(self) -> bool:
@@ -153,6 +155,8 @@ class DatabaseServer:
                 await self._check_tcp()
                 self.state = "running"
                 _LOGGER.info("%s is running", self.engine)
+                if self.on_ready:
+                    self._ready_task = asyncio.create_task(self._notify_ready())
                 delay = 5
                 await self._proc.wait()  # type: ignore[union-attr]
                 if self._stopping:
@@ -167,6 +171,12 @@ class DatabaseServer:
             _LOGGER.error("%s: %s (restarting in %ss)", self.engine, self.error, delay)
             await asyncio.sleep(delay)
             delay = min(delay * 2, 120)
+
+    async def _notify_ready(self) -> None:
+        try:
+            await self.on_ready()
+        except Exception:  # noqa: BLE001 - never let a callback disturb the server
+            _LOGGER.exception("on_ready callback failed")
 
     async def _wait_ready(self, probe: list[str]) -> None:
         loop = asyncio.get_running_loop()

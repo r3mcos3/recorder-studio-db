@@ -11,6 +11,7 @@ class FakeHA:
         from studio import integration
 
         self.live_result = {"applied": True, "restart": [], "changed": ["filter"], "reason": None}  # what apply_config answers
+        self.pause_result = {"paused": True, "reason": None}
         self.own_old_code = False  # an older integration without the status service is running
         self.own_version = integration.source_version()  # version of our integration Home Assistant runs (None = not loaded)
         self.flow_error, self.flow_result, self.flow_loads = False, {"type": "create_entry"}, True
@@ -30,6 +31,10 @@ class FakeHA:
         self.calls.append((domain, service, data))
         if isinstance(self.live_result, Exception):
             raise self.live_result
+        if domain == integration.DOMAIN and service in ("pause_recorder", "resume_recorder"):
+            if self.own_version is None:
+                raise HAError(f"{domain}.{service}: service not found")
+            return self.pause_result if service == "pause_recorder" else {"resumed": True, "seconds": 4.2, "overflow": False}
         if domain == integration.DOMAIN:
             if self.own_version is None or (service == "status" and self.own_old_code):
                 raise HAError(f"{domain}.{service}: service not found")
@@ -410,3 +415,85 @@ async def test_engine_label_is_stored_with_the_figures(client, studio):
     studio.data["stats"]["engine"] = "MariaDB"  # as measured by an earlier run; a label computed before any analysis must not win
     status, body = await cmd(client, type="recorder_studio/db_metrics")
     assert body["result"]["sensors"]["engine"].startswith("MariaDB")
+
+
+class OrderedServer(FakeServer):
+    """Records, in the Home Assistant call log, the moment the server is stopped."""
+
+    def __init__(self, engine, ha):
+        super().__init__(engine)
+        self.ha = ha
+
+    async def stop(self):
+        self.ha.calls.append(("server", "stop", None))
+        await super().stop()
+
+
+async def test_shutdown_pauses_the_recorder_before_the_server_stops(studio):
+    from studio import server as server_module
+
+    studio.server = OrderedServer("mariadb", studio.ha)
+    await studio.server.start()
+    studio.backend = "sql"
+    app = {"studio": studio, "ha": studio.ha}
+    studio.ha.close = lambda: _noop()
+    await server_module._stop(app)
+    names = [c[1] for c in studio.ha.calls if c[1] in ("pause_recorder", "stop")]
+    assert names == ["pause_recorder", "stop"]
+
+
+async def _noop():
+    return None
+
+
+async def test_no_pause_when_home_assistant_does_not_record_into_the_server(studio):
+    studio.server = FakeServer("mariadb")
+    await studio.server.start()
+    studio.backend = "sqlite"
+    studio.data["options"].pop("db_url", None)
+    assert await studio.pause_recorder() is False
+    assert not [c for c in studio.ha.calls if c[1] == "pause_recorder"]
+
+
+async def test_pause_when_the_recorder_is_configured_for_the_server_before_any_measurement(studio):
+    studio.server = FakeServer("mariadb")
+    await studio.server.start()
+    studio.backend = "sqlite"  # not measured yet after a start
+    studio.data["engine"] = "mariadb"
+    studio.data["options"]["db_url"] = await studio.target_url()
+    assert studio.data["options"]["db_url"].startswith("mysql://")
+    assert await studio.pause_recorder() is True
+
+
+async def test_pause_problems_never_stop_the_shutdown(studio):
+    from studio.ha import HAError
+
+    studio.server = FakeServer("mariadb")
+    await studio.server.start()
+    studio.backend = "sql"
+    studio.ha.pause_result = {"paused": False, "reason": "timeout"}
+    assert await studio.pause_recorder() is False
+    studio.ha.own_version = None  # integration not running
+    assert await studio.pause_recorder() is False
+    studio.ha.live_result = HAError("Home Assistant unreachable")
+    assert await studio.pause_recorder() is False
+    await studio.resume_recorder()  # also silent
+
+
+async def test_server_start_resumes_a_waiting_recorder(studio):
+    from studio import engines
+
+    server = studio.make_server_for_test = None
+    studio.server = FakeServer("mariadb")
+    studio.server.on_ready = studio.resume_recorder
+    real = engines.DatabaseServer.__new__(engines.DatabaseServer)
+    real.on_ready = studio.resume_recorder
+    await real._notify_ready()
+    assert ("recorder_studio_db", "resume_recorder", None) in studio.ha.calls
+
+
+async def test_make_server_wires_the_resume_callback(studio, monkeypatch):
+    monkeypatch.setattr("studio.engines.DatabaseServer", FakeServer)
+    studio.data["engine"] = "mariadb"
+    server = studio.make_server()
+    assert server.on_ready == studio.resume_recorder

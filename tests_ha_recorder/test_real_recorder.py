@@ -40,3 +40,31 @@ async def test_real_recorder_stops_recording_a_newly_excluded_entity(recorder_mo
     assert not (getattr(instance, "_queued_states", True) is None and getattr(instance, "_queued_states_listener", None) is not None)
     assert ("sensor.skip", "2") not in states  # excluded without a restart
     assert ("sensor.keep", "2") in states and ("sensor.new_entity", "1") in states  # everything else is still recorded
+
+
+async def test_events_during_a_pause_are_written_after_the_resume(recorder_mock, hass, config_dir):
+    """The point of the pause: nothing that happens while the database server restarts is lost."""
+    from homeassistant.components.recorder import get_instance
+    from homeassistant.components.recorder.db_schema import States, StatesMeta
+    from homeassistant.components.recorder.util import session_scope
+    from pytest_homeassistant_custom_component.components.recorder.common import async_wait_recording_done
+
+    from custom_components.recorder_studio_db import pause
+
+    hass.data.setdefault(DOMAIN, {})
+    hass.states.async_set("sensor.before", "1")
+    await async_wait_recording_done(hass)
+    assert (await pause.async_pause(hass))["paused"] is True
+    hass.states.async_set("sensor.during", "1")
+    hass.states.async_set("sensor.during", "2")
+    await hass.async_block_till_done()
+    assert (await pause.async_resume(hass))["resumed"] is True
+    await async_wait_recording_done(hass)
+
+    def recorded() -> set:
+        with session_scope(hass=hass, read_only=True) as session:
+            rows = session.query(StatesMeta.entity_id, States.state).join(States, States.metadata_id == StatesMeta.metadata_id).all()
+            return {(r[0], r[1]) for r in rows}
+
+    states = await get_instance(hass).async_add_executor_job(recorded)
+    assert {("sensor.before", "1"), ("sensor.during", "1"), ("sensor.during", "2")} <= states

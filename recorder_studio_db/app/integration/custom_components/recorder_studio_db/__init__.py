@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
@@ -16,6 +17,7 @@ from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN, SIGNAL_METRICS, STORAGE_KEY, STORAGE_VERSION, VERSION
 from .live import async_apply_live
+from .pause import async_pause, async_resume, release_now
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,6 +30,15 @@ async def _async_handle_apply_config(call: ServiceCall) -> dict:
     result = await async_apply_live(call.hass)
     result["version"] = VERSION
     return result
+
+
+async def _async_handle_pause(call: ServiceCall) -> dict:
+    """The add-on is about to stop the database on purpose: let the recorder wait instead of failing."""
+    return await async_pause(call.hass)
+
+
+async def _async_handle_resume(call: ServiceCall) -> dict:
+    return await async_resume(call.hass)
 
 
 async def _async_handle_status(call: ServiceCall) -> dict:
@@ -58,11 +69,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain["store"] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
     domain["metrics"] = await domain["store"].async_load() or {}  # the last figures survive a restart until the add-on sends new ones
     hass.services.async_register(DOMAIN, "update_metrics", _async_handle_update_metrics)
+    hass.services.async_register(DOMAIN, "pause_recorder", _async_handle_pause, supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register(DOMAIN, "resume_recorder", _async_handle_resume, supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(DOMAIN, "apply_config", _async_handle_apply_config, supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(DOMAIN, "status", _async_handle_status, supports_response=SupportsResponse.ONLY)
     entry.async_on_unload(lambda: hass.services.async_remove(DOMAIN, "apply_config"))
     entry.async_on_unload(lambda: hass.services.async_remove(DOMAIN, "status"))
     entry.async_on_unload(lambda: hass.services.async_remove(DOMAIN, "update_metrics"))
+    for name in ("pause_recorder", "resume_recorder"):
+        entry.async_on_unload(lambda name=name: hass.services.async_remove(DOMAIN, name))
+    entry.async_on_unload(lambda: release_now(hass))  # never leave the recorder waiting
+    entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, lambda _event: release_now(hass)))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

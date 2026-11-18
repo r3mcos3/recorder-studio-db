@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0
+- **No history lost when the add-on restarts.** Before the add-on stops the database (update, restart, backup), it asks Home Assistant's recorder to wait: the recorder keeps its events in memory and writes them once the database is back, after renewing its connections. Until now a commit that happened to run at the moment the server went down could be lost (a few seconds of history).
+- The pause is protected: the recorder continues by itself after 3 minutes, when its queue gets long, when Home Assistant stops or the integration is unloaded.
+- Needs the integration of this version: **restart Home Assistant once** after updating (the add-on says so).
+
 ## 0.7.3
 - Engine sensor: "MariaDB 11.8.9" instead of "MariaDB 11.8.9-MariaDB" (cosmetic).
 

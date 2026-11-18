@@ -153,7 +153,48 @@ class Studio:
         return self.config_dir / self.sqlite_file
 
     def make_server(self) -> engines.DatabaseServer | None:
-        return engines.DatabaseServer(self.engine) if self.engine in ("postgresql", "mariadb") else None
+        server = engines.DatabaseServer(self.engine) if self.engine in ("postgresql", "mariadb") else None
+        if server:
+            server.on_ready = self.resume_recorder  # the server is back: let a waiting recorder continue
+        return server
+
+    async def _records_into_server(self) -> bool:
+        """True when Home Assistant is configured to record into the database server this add-on runs."""
+        if not (self.server and self.server.running):
+            return False
+        if self.backend == "sql":
+            return True
+        try:
+            url = self.data["options"].get("db_url")
+            return bool(url) and url == await self.target_url()  # an empty db_url means Home Assistant's own SQLite
+        except Exception:  # noqa: BLE001 - Home Assistant not reachable: no pause possible anyway
+            return False
+
+    async def pause_recorder(self) -> bool:
+        """Before the database server is stopped on purpose (add-on stop/update/restart): let the recorder wait.
+
+        The recorder keeps its events in memory and writes them when the server is back, so a restart loses no history.
+        Needs the bundled integration; without it (or on any problem) nothing happens and the add-on just stops.
+        """
+        if not await self._records_into_server():
+            return False
+        try:
+            result = await self.ha.call_service_response(bundled.DOMAIN, "pause_recorder")
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.info("recorder not paused: %s", err)
+            return False
+        paused = bool(isinstance(result, dict) and result.get("paused"))
+        _LOGGER.info("recorder pause before database stop: %s", "paused" if paused else (result or {}).get("reason"))
+        return paused
+
+    async def resume_recorder(self) -> None:
+        """The database server is running again: let a paused recorder continue (harmless when it is not paused)."""
+        try:
+            result = await self.ha.call_service_response(bundled.DOMAIN, "resume_recorder")
+            if isinstance(result, dict) and result.get("resumed"):
+                _LOGGER.info("recorder resumed after %s s%s", result.get("seconds"), " (queue overflowed!)" if result.get("overflow") else "")
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("recorder resume not needed/possible: %s", err)
 
     async def set_engine(self, engine: str, sqlite_name: str | None = None) -> None:
         """Switch the database engine this add-on offers; starts/stops the server accordingly."""

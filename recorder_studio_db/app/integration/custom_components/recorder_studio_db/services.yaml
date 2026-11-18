@@ -6,3 +6,5 @@ update_metrics:
       required: true
       selector:
         object:
+pause_recorder:
+resume_recorder:

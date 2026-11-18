@@ -58,6 +58,7 @@ async def _background(app: web.Application) -> None:
 
 
 METRICS_INTERVAL = 30 * 60  # seconds between background measurements for the sensors
+PAUSE_TIMEOUT = 15  # seconds the shutdown may spend on asking the recorder to wait
 METRICS_RETRY = 60  # seconds between attempts while the sensors cannot be reached
 
 
@@ -116,8 +117,12 @@ async def _stop(app: web.Application) -> None:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
-    if app["studio"].server:
-        await app["studio"].server.stop()
+    studio: Studio = app["studio"]
+    if studio.server:
+        with contextlib.suppress(Exception):
+            # planned stop: first let Home Assistant's recorder wait, so no history is lost while the database is down
+            await asyncio.wait_for(studio.pause_recorder(), PAUSE_TIMEOUT)
+        await studio.server.stop()
     await app["ha"].close()
 
 
