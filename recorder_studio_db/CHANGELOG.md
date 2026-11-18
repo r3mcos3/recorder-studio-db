@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.4
+- Database tab on a phone: the table with table sizes was wider than the screen and pushed the page sideways. It now fits (the Share bars are hidden on narrow screens) and scrolls sideways if it is still too wide.
+- A clear warning in the README and the add-on documentation: use at your own risk, the author is not responsible for data loss, make a backup first.
+
 ## 0.8.3
 - PostgreSQL is no longer labelled experimental. It was tested on a real Home Assistant: recording, live apply without a restart, an add-on restart without losing a value (240 of 240), copying 2.8 million rows of history (statistics identical to the source), all 16 sensors and a repack (VACUUM FULL).
 - PostgreSQL log: the start check no longer logs `FATAL: role "root" does not exist` (cosmetic, it was only the readiness probe).

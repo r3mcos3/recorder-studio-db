@@ -1,5 +1,7 @@
 # Recorder Studio DB
 
+> **⚠️ Use at your own risk.** This add-on replaces the database your Home Assistant history lives in, and it is new software. The author is not responsible for lost or damaged data, history, statistics or anything else. **Make a full backup first**, keep your old SQLite file until you are sure everything works, and do not rely on it for anything you cannot afford to lose.
+
 Recorder Studio (what the recorder stores, what fills the database, purge and repack) as a sidebar panel,
 plus an optional database server run by this add-on.
 

@@ -755,17 +755,17 @@ class RecorderStudioPanel extends LitElement {
           ${this._stat("Disk free", dash(k.disk_free, fmtBytes), k.days_to_full ? `full in ≈ ${fmtNum(k.days_to_full)} days` : "")}
         </div>
         ${fragHint ? html`<p class="muted">${fragHint}</p>` : nothing}
-        <table class="tbl">
-          <thead><tr><th>Table</th><th class="num">Size</th><th class="num">${m.rows_estimated ? "Rows ≈" : "Rows"}</th><th>Share</th></tr></thead>
+        <div class="tblwrap"><table class="tbl">
+          <thead><tr><th>Table</th><th class="num">Size</th><th class="num">${m.rows_estimated ? "Rows ≈" : "Rows"}</th><th class="share">Share</th></tr></thead>
           <tbody>
             ${m.tables.map((t) => html`<tr>
               <td><code>${t.name}</code></td>
               <td class="num">${fmtBytes(t.bytes)}</td>
               <td class="num">${dash(t.rows, fmtNum)}</td>
-              <td><div style="height:6px;border-radius:3px;background:var(--divider-color,#ccc);min-width:60px"><div style=${`height:100%;border-radius:3px;width:${Math.min(100, t.share || 0)}%;background:var(--primary-color)`}></div></div></td>
+              <td class="share"><div style="height:6px;border-radius:3px;background:var(--divider-color,#ccc);min-width:60px"><div style=${`height:100%;border-radius:3px;width:${Math.min(100, t.share || 0)}%;background:var(--primary-color)`}></div></div></td>
             </tr>`)}
           </tbody>
-        </table>
+        </table></div>
         <p class="muted">These figures are also available as sensors in Home Assistant (device “Recorder Studio DB”).</p>
       </div>`;
   }
@@ -1135,7 +1135,7 @@ class RecorderStudioPanel extends LitElement {
     main { padding-top: 16px; }
     /* overview */
     .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 12px; } .stat { margin: 0; } .stat .k { color: var(--rs-muted); font-size: .85rem; } .stat .v { font-size: 1.9rem; font-weight: 500; margin: 4px 0; font-variant-numeric: tabular-nums; } .stat .s { color: var(--rs-muted); font-size: .8rem; } .stat.good .v { color: var(--rs-ok); } .stat.warn .v { color: var(--rs-warn); }
-    .tbl { width: 100%; border-collapse: collapse; margin-top: 8px; } .tbl th, .tbl td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--divider-color, #444); } .tbl th { color: var(--rs-muted); font-weight: 500; font-size: .85rem; } .tbl .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .tblwrap { overflow-x: auto; max-width: 100%; } .tbl { width: 100%; border-collapse: collapse; margin-top: 8px; } @media (max-width: 640px) { .tbl .share { display: none; } .tbl th, .tbl td { padding: 6px 4px; } .tbl code { font-size: .8rem; word-break: break-all; } } .tbl th, .tbl td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--divider-color, #444); } .tbl th { color: var(--rs-muted); font-weight: 500; font-size: .85rem; } .tbl .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .grid2 { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; } @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
     .bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; } .bars li { display: grid; grid-template-columns: minmax(80px, 34%) 1fr auto; gap: 10px; align-items: center; font-size: .85rem; }
     .bars .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, monospace; font-size: .78rem; } .bar { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); border-radius: 4px; height: 10px; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--primary-color); border-radius: 4px; } .bars .ex .bar i { background: var(--rs-warn); } .bars .ex .lbl::after { content: " ⚑"; } .val { font-variant-numeric: tabular-nums; color: var(--rs-muted); min-width: 110px; text-align: right; } .val b, .recs b { color: var(--primary-text-color); font-weight: 500; display: inline-block; min-width: 44px; }

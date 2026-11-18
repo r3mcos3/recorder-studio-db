@@ -2,6 +2,8 @@
 
 [![Add the repository to your Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fr3mcos3%2Frecorder-studio-db)
 
+> **⚠️ Use at your own risk.** This add-on replaces the database your Home Assistant history lives in, and it is new software. The author is not responsible for lost or damaged data, history, statistics or anything else. **Make a full backup first**, keep your old SQLite file until you are sure everything works, and do not rely on it for anything you cannot afford to lose.
+
 A Home Assistant **add-on** that runs the recorder database for you (SQLite, MariaDB or PostgreSQL, chosen in the panel) and has
 [Recorder Studio](https://github.com/r3mcos3/recorder-studio) built in: see what fills the database, choose what is recorded,
 purge and repack safely, and watch the database with sensors.
