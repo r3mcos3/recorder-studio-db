@@ -35,6 +35,7 @@ class Studio:
             self.data["options"]["db_url"] = "mysql://" + url[len("mysql+pymysql://"):]
         self.pending_restart = False
         self.live: dict[str, Any] | None = None
+        self.metrics_pushed = False  # did the last push reach the sensors?
         self.integration_checked = 0.0  # time.monotonic() of the last check of the bundled integration
         self.integration: dict[str, Any] = {"state": "unknown", "version": bundled.source_version(), "loaded": None, "message": None}
         self.copy_progress = history_copy.Progress()
@@ -291,8 +292,10 @@ class Studio:
             if not any(v is not None for k, v in m["sensors"].items() if k != "engine"):
                 return False
             await self.ha.call_service(bundled.DOMAIN, "update_metrics", {"metrics": m["sensors"]})
+            self.metrics_pushed = True
             return True
         except Exception as err:  # noqa: BLE001 - Home Assistant down, integration not loaded yet, ...
+            self.metrics_pushed = False
             _LOGGER.debug("metrics not pushed: %s", err)
             return False
 

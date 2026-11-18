@@ -58,10 +58,15 @@ async def _background(app: web.Application) -> None:
 
 
 METRICS_INTERVAL = 30 * 60  # seconds between background measurements for the sensors
+METRICS_RETRY = 60  # seconds between attempts while the sensors cannot be reached
 
 
 async def _metrics(app: web.Application) -> None:
-    """Keeps the Home Assistant sensors current while the panel is closed (a full analysis also feeds the history)."""
+    """Keeps the Home Assistant sensors current while the panel is closed (a full analysis also feeds the history).
+
+    While the sensors cannot be reached (Home Assistant restarting, integration not loaded yet) the last figures are
+    offered again every minute, so they appear shortly after Home Assistant is back instead of 30 minutes later.
+    """
     studio: Studio = app["studio"]
     await asyncio.sleep(90)
     while True:
@@ -69,7 +74,13 @@ async def _metrics(app: web.Application) -> None:
             await studio.analyze(full=True)
         except Exception:  # noqa: BLE001
             _LOGGER.exception("metrics refresh failed")
-        await asyncio.sleep(METRICS_INTERVAL)
+        waited = 0
+        while waited < METRICS_INTERVAL:
+            step = METRICS_INTERVAL if studio.metrics_pushed else METRICS_RETRY
+            await asyncio.sleep(step)
+            waited += step
+            if not studio.metrics_pushed:
+                await studio.push_metrics()
 
 
 async def _integration(app: web.Application) -> None:

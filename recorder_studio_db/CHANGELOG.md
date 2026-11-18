@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.1
+- The sensors get their first values within a minute after Home Assistant has restarted (the add-on offers the figures again every minute while they cannot be delivered, instead of waiting for the next 30-minute round).
+
 ## 0.7.0
 - **Database details** (Database tab): size, growth per day, how far the history goes back, unused space / fragmentation, free disk with a days-until-full forecast, and rows + size + share per table. Works for SQLite, PostgreSQL and MariaDB (PostgreSQL shows its share of dead rows instead of free pages; row counts of PostgreSQL/MariaDB are estimates).
 - **16 sensors** in Home Assistant (device *Recorder Studio DB*, category diagnostic): database size, states / attributes / events / statistics table sizes and counts, records per day, oldest record, growth per day, unused space, reclaimable space, disk free, days until full and the engine. They refresh every 30 minutes, also while the panel is closed, and keep their last value across restarts.

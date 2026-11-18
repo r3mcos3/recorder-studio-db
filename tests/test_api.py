@@ -386,3 +386,19 @@ async def test_a_missing_integration_does_not_break_the_analysis(client, studio)
     studio.ha.call_service = boom
     status, body = await cmd(client, type="recorder_studio/analyze", light=False)
     assert status == 200 and body["result"]
+
+
+async def test_failed_push_is_remembered_so_it_can_be_retried(client, studio):
+    from studio.ha import HAError
+
+    await cmd(client, type="recorder_studio/analyze", light=False)
+    assert studio.metrics_pushed is True
+    good = studio.ha.call_service
+
+    async def boom(domain, service, data=None):
+        raise HAError("recorder_studio_db.update_metrics: HTTP 400 400: Bad Request")
+
+    studio.ha.call_service = boom
+    assert await studio.push_metrics() is False and studio.metrics_pushed is False
+    studio.ha.call_service = good
+    assert await studio.push_metrics() is True and studio.metrics_pushed is True
