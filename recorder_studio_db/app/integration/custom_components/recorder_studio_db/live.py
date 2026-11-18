@@ -23,8 +23,7 @@ from . import migration
 _LOGGER = logging.getLogger(__name__)
 
 NEEDED = ("entity_filter", "exclude_event_types", "keep_days", "auto_purge", "auto_repack", "commit_interval", "db_url",
-          "async_initialize", "_async_stop_queue_watcher_and_event_listener", "_event_listener",
-          "_queued_states", "_queued_states_listener", "_async_drop_queued_states")
+          "async_initialize", "_async_stop_queue_watcher_and_event_listener", "_event_listener")
 
 
 def _read(path: Path) -> str | None:
@@ -54,8 +53,8 @@ def _swap_filter(instance: Any, entity_filter: Any, exclude_types: set[str]) -> 
 def _drop_stale_state_index(instance: Any) -> None:
     """Once the recorder is ready it has dropped its index of queued state changes (None). async_initialize still starts
     the listener that fills that index, and that listener fails on every state change: remove it again."""
-    if instance._queued_states is None and instance._queued_states_listener is not None:
-        instance._async_drop_queued_states()
+    if getattr(instance, "_queued_states", True) is None and getattr(instance, "_queued_states_listener", None) is not None:
+        instance._async_drop_queued_states()  # older recorders have no such index: nothing to do there
 
 
 def _restart_keys(hass: HomeAssistant, instance: Any, conf: dict[str, Any]) -> list[str]:

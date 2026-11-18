@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.3
+- The live apply also works with Home Assistant versions whose recorder has no queued-states index (the guard against a changed recorder was too strict about it).
+
 ## 0.6.2
 - Fix: after applying a change live, Home Assistant logged `Error running job ... _queued_state_listener ... 'NoneType' object has no attribute 'setdefault'` on every state change (data was still recorded). The integration now removes that listener again. **Restart Home Assistant once** after updating to load the fixed integration.
 - The add-on's check of the integration no longer applies the configuration itself; it uses a new side-effect free service `recorder_studio_db.status`.
