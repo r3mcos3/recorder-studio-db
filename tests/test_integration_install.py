@@ -29,7 +29,7 @@ def test_missing_bundle_is_an_error(tmp_path):
 
 # The integration's version is NOT the add-on's version: Home Assistant only has to be restarted to load a new add-on
 # release if the integration code itself changed. So change the code => bump the manifest version and add its hash here.
-KNOWN_CODE = {"0.8.1": "82c1419482404011aaff3bd5f05314551a36b67ce48d0162f65b8a8f277be87d", "0.8.0": "ef582ec68df1e2323d3dcf588115ec2d12c8099f8e68899731bc31e056fc4e7c", "0.7.0": "45bb08536f1988b4226943d4769f27c08447fa5da8e03e2c0226cd934cb5795f", "0.6.5": "0db90d5c4ec18cdef33b2f657a05009a5ddec20fa86c51b387e3fe4e77dd0a97"}
+KNOWN_CODE = {"0.8.2": "71a6b45cdd6615972dfffa09cab9bb7a256bb18ba4421681a38e8ccf85417b66", "0.8.1": "82c1419482404011aaff3bd5f05314551a36b67ce48d0162f65b8a8f277be87d", "0.8.0": "ef582ec68df1e2323d3dcf588115ec2d12c8099f8e68899731bc31e056fc4e7c", "0.7.0": "45bb08536f1988b4226943d4769f27c08447fa5da8e03e2c0226cd934cb5795f", "0.6.5": "0db90d5c4ec18cdef33b2f657a05009a5ddec20fa86c51b387e3fe4e77dd0a97"}
 
 
 def _code_hash() -> str:

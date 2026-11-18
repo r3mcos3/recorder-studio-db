@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.6
+- **Integration 0.8.2: restart Home Assistant once** after updating.
+- A planned database restart (add-on update, restart or backup) no longer fills the Home Assistant log with errors. While the recorder is paused for it, and for 30 seconds after, "Can't connect" / "Lost connection" errors from the recorder and from other integrations that read the database (for example Spook) are hidden, and one line afterwards says how many. Only connection errors are hidden, and only in that window: a database that goes away at any other moment is still logged as an error.
+
 ## 0.8.5
 - Same as 0.8.4 (phone layout, data loss warning), with a fix: `config.yaml` of 0.8.4 was not valid YAML, so Home Assistant never offered that version. Tests now check that the file parses.
 
