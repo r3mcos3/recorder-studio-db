@@ -135,6 +135,7 @@ async def test_database_url_kept_in_secrets_yaml_is_resolved(hass, config_dir, r
     activate(config_dir, "db_url: !secret recorder_studio_db_url\n")
     recorder.db_url = url
     result = await live.async_apply_live(hass)
-    assert result["applied"] and "db_url" not in result["restart"]  # same database: no restart for the URL
+    assert result["applied"], result  # (reason shows what failed)
+    assert "db_url" not in result["restart"]  # same database: no restart for the URL
     recorder.db_url = "mysql://u:pw@other/db"
     assert "db_url" in (await live.async_apply_live(hass))["restart"]  # a different database is still noticed

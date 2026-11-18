@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.8.2
+- **Integration 0.8.1: restart Home Assistant once** after updating. The integration now resolves the `!secret` in `recorder_studio.yaml` (Home Assistant's YAML loader only does that when it is given the secrets of the config folder); without this, changes would have asked for a restart every time.
 - **The database password no longer sits in `recorder_studio.yaml`.** That file is often under version control. The add-on now stores the URL in your `secrets.yaml` (key `recorder_studio_db_url`) and writes `db_url: !secret recorder_studio_db_url`. An existing plain-text password is moved automatically when the add-on starts; only that one line of `recorder_studio.yaml` is changed.
 - Safe by design: the secret is written first and read back, and only then does `recorder_studio.yaml` refer to it. If `secrets.yaml` is not plain YAML or cannot be written, nothing in it is touched, the URL stays in `recorder_studio.yaml` (Home Assistant keeps working) and the Database tab shows why. A copy of the previous `secrets.yaml` is kept in the add-on's own data folder, not next to the original.
 - Keep the `recorder_studio_db_url` entry in `secrets.yaml`: without it Home Assistant cannot read `recorder_studio.yaml`.
