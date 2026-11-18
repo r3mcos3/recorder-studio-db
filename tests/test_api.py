@@ -11,6 +11,7 @@ class FakeHA:
         from studio import integration
 
         self.live_result = {"applied": True, "restart": [], "changed": ["filter"], "reason": None}  # what apply_config answers
+        self.own_old_code = False  # an older integration without the status service is running
         self.own_version = integration.source_version()  # version of our integration Home Assistant runs (None = not loaded)
         self.fallback = None  # answer of the Marketplace integration's recorder_studio.apply_config (None = not installed)
         self.flow_error, self.flow_result, self.flow_loads = False, {"type": "create_entry"}, True
@@ -31,8 +32,10 @@ class FakeHA:
         if isinstance(self.live_result, Exception):
             raise self.live_result
         if domain == integration.DOMAIN:
-            if self.own_version is None:
+            if self.own_version is None or (service == "status" and self.own_old_code):
                 raise HAError(f"{domain}.{service}: service not found")
+            if service == "status":
+                return {"version": self.own_version}
             return {**self.live_result, "version": self.own_version}
         if self.fallback is None:
             raise HAError(f"{domain}.{service}: service not found")
@@ -340,3 +343,10 @@ async def test_unknown_service_is_recognised_from_a_bare_400(aiohttp_client, mon
         assert await h.call_service_response("recorder_studio", "apply_config") == {"applied": True}
     finally:
         await h.close()
+
+
+async def test_integration_check_does_not_apply_anything_and_spots_old_code(studio):
+    studio.ha.own_old_code, studio.ha.flow_result = True, {"type": "abort", "reason": "single_instance_allowed"}
+    info = await studio.ensure_integration()
+    assert info["state"] == "restart_needed"  # the running code predates the status service: restart to load the new files
+    assert ("recorder_studio_db", "apply_config", None) not in studio.ha.calls

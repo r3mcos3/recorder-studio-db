@@ -131,7 +131,7 @@ class Studio:
     async def _loaded_integration_version(self) -> str | None:
         """The version Home Assistant runs, or None when it has not loaded the integration."""
         try:
-            result = await self.ha.call_service_response(bundled.DOMAIN, "apply_config")
+            result = await self.ha.call_service_response(bundled.DOMAIN, "status")
         except HAError as err:
             if "not found" in str(err):
                 return None

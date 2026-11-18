@@ -26,6 +26,11 @@ async def _async_handle_apply_config(call: ServiceCall) -> dict:
     return result
 
 
+async def _async_handle_status(call: ServiceCall) -> dict:
+    """Which version runs. Changes nothing (the add-on uses it to check the integration is loaded)."""
+    return {"version": VERSION}
+
+
 async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
     hass.data.setdefault(DOMAIN, {})
     return True
@@ -33,7 +38,9 @@ async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN, "apply_config", _async_handle_apply_config, supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register(DOMAIN, "status", _async_handle_status, supports_response=SupportsResponse.ONLY)
     entry.async_on_unload(lambda: hass.services.async_remove(DOMAIN, "apply_config"))
+    entry.async_on_unload(lambda: hass.services.async_remove(DOMAIN, "status"))
     return True
 
 

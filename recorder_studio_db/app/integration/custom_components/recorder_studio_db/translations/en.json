@@ -8,6 +8,10 @@
     "apply_config": {
       "name": "Apply recorder configuration",
       "description": "Applies recorder_studio.yaml to the running recorder without a restart: entity filter, retention and auto purge/repack. The database URL and commit interval still need a restart."
+    },
+    "status": {
+      "name": "Status",
+      "description": "Returns the version of this integration. Changes nothing."
     }
   }
 }

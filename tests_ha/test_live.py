@@ -17,8 +17,15 @@ class FakeRecorder:
         self.keep_days, self.auto_purge, self.auto_repack, self.commit_interval = 10, True, True, 5
         self.db_url = ""
         self._event_listener = object() if listening else None
+        self._queued_states = None  # the recorder is ready: it dropped its index of queued state changes
+        self._queued_states_listener = None
         self.calls = []
         self.fail_init = False
+
+    def _async_drop_queued_states(self):
+        self.calls.append("drop_index")
+        self._queued_states_listener = None
+        self._queued_states = None
 
     def _async_stop_queue_watcher_and_event_listener(self):
         self.calls.append("stop")
@@ -29,6 +36,7 @@ class FakeRecorder:
         if self.fail_init and self.entity_filter is not None:
             raise RuntimeError("boom")
         self._event_listener = object()
+        self._queued_states_listener = object()  # like the real async_initialize: it always starts this listener
 
 
 def activate(config_dir, extra=""):
@@ -53,7 +61,8 @@ async def test_applies_filter_and_retention_without_restart(hass, config_dir, re
     assert result["applied"] and result["restart"] == [] and set(result["changed"]) == {"keep_days", "auto_purge", "filter"}
     assert (recorder.keep_days, recorder.auto_purge) == (3, False)
     assert recorder.entity_filter("sensor.skip") is False and recorder.entity_filter("sensor.other") is True
-    assert recorder.calls == ["stop", "init"]
+    assert recorder.calls == ["stop", "init", "drop_index"]
+    assert recorder._queued_states_listener is None  # no listener that would fail on every state change
 
 
 async def test_unchanged_rules_do_not_touch_the_listener_again(hass, config_dir, recorder):
@@ -102,6 +111,7 @@ async def test_failed_swap_restores_the_listener(hass, config_dir, recorder):
     result = await live.async_apply_live(hass)
     assert not result["applied"] and result["restart"] == ["all"]
     assert recorder._event_listener is not None  # never left without its event listener
+    assert recorder._queued_states_listener is None
     assert recorder.entity_filter is None  # the old filter is back
 
 
@@ -112,5 +122,7 @@ async def test_config_flow_creates_the_entry_and_the_service_answers(hass, confi
     activate(config_dir)
     response = await hass.services.async_call(DOMAIN, "apply_config", blocking=True, return_response=True)
     assert response["applied"] is True and response["version"] == VERSION
+    status = await hass.services.async_call(DOMAIN, "status", blocking=True, return_response=True)
+    assert status == {"version": VERSION}
     again = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     assert again["type"] == "abort" and again["reason"] == "single_instance_allowed"

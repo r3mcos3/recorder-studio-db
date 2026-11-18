@@ -23,7 +23,8 @@ from . import migration
 _LOGGER = logging.getLogger(__name__)
 
 NEEDED = ("entity_filter", "exclude_event_types", "keep_days", "auto_purge", "auto_repack", "commit_interval", "db_url",
-          "async_initialize", "_async_stop_queue_watcher_and_event_listener", "_event_listener")
+          "async_initialize", "_async_stop_queue_watcher_and_event_listener", "_event_listener",
+          "_queued_states", "_queued_states_listener", "_async_drop_queued_states")
 
 
 def _read(path: Path) -> str | None:
@@ -41,11 +42,20 @@ def _swap_filter(instance: Any, entity_filter: Any, exclude_types: set[str]) -> 
     try:
         instance.entity_filter, instance.exclude_event_types = entity_filter, exclude_types
         instance.async_initialize()
+        _drop_stale_state_index(instance)
     except Exception:
         _LOGGER.exception("Could not apply the new recorder filter, restoring the previous one")
         instance.entity_filter, instance.exclude_event_types = old_filter, old_types
         instance.async_initialize()  # the recorder must never be left without its listeners
+        _drop_stale_state_index(instance)
         raise
+
+
+def _drop_stale_state_index(instance: Any) -> None:
+    """Once the recorder is ready it has dropped its index of queued state changes (None). async_initialize still starts
+    the listener that fills that index, and that listener fails on every state change: remove it again."""
+    if instance._queued_states is None and instance._queued_states_listener is not None:
+        instance._async_drop_queued_states()
 
 
 def _restart_keys(hass: HomeAssistant, instance: Any, conf: dict[str, Any]) -> list[str]:

@@ -35,5 +35,8 @@ async def test_real_recorder_stops_recording_a_newly_excluded_entity(recorder_mo
             return {(r[0], r[1]) for r in rows}
 
     states = await get_instance(hass).async_add_executor_job(known)
+    instance = get_instance(hass)
+    # a listener that expects the (dropped) index of queued states would raise on every state change
+    assert not (instance._queued_states is None and instance._queued_states_listener is not None)
     assert ("sensor.skip", "2") not in states  # excluded without a restart
     assert ("sensor.keep", "2") in states and ("sensor.new_entity", "1") in states  # everything else is still recorded

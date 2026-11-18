@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+- Fix: after applying a change live, Home Assistant logged `Error running job ... _queued_state_listener ... 'NoneType' object has no attribute 'setdefault'` on every state change (data was still recorded). The integration now removes that listener again. **Restart Home Assistant once** after updating to load the fixed integration.
+- The add-on's check of the integration no longer applies the configuration itself; it uses a new side-effect free service `recorder_studio_db.status`.
+
 ## 0.6.1
 - Fix: the integration was installed but never activated, because Home Assistant answers an unknown service with a bare `400: Bad Request` and the add-on mistook that for "Home Assistant not reachable". It now creates the integration entry itself.
 
