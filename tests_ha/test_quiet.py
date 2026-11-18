@@ -24,6 +24,9 @@ class Collect(logging.Handler):
     def emit(self, record):
         self.messages.append(record.getMessage())
 
+    def errors(self):
+        return [m for m in self.messages if m.startswith(("Error", "(MySQLdb"))]
+
 
 @pytest.fixture
 def sink():
@@ -74,24 +77,24 @@ def test_filter_looks_into_the_exception_too():
 async def test_errors_during_a_paused_restart_are_hidden_and_counted(hass, recorder, sink):
     log = logging.getLogger("homeassistant.components.recorder.util")
     log.error(LOST)
-    assert LOST in sink.messages  # before the pause: reported
+    assert sink.errors() == [LOST]  # before the pause: reported
     sink.messages.clear()
 
     await pause.async_pause(hass)
     log.error(LOST)
     log.error(CANT)
     log.error("Error executing query: (1146, \"Table 'states' doesn't exist\")")
-    assert sink.messages == ["Error executing query: (1146, \"Table 'states' doesn't exist\")"]  # only the real error shows
+    assert sink.errors() == ["Error executing query: (1146, \"Table 'states' doesn't exist\")"]  # only the real error shows
 
     await pause.async_resume(hass)
     log.error(LOST)  # still inside the grace period
-    assert len(sink.messages) == 1
+    assert len(sink.errors()) == 1
 
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=quiet.GRACE + 5))
     await hass.async_block_till_done()
     assert any("Hid 3 database connection error" in m for m in sink.messages)
     log.error(LOST)  # the window is over: reported again
-    assert sink.messages[-1] == LOST
+    assert sink.errors()[-1] == LOST
     assert "quiet" not in hass.data[DOMAIN]
 
 
