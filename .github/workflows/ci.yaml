@@ -12,7 +12,7 @@ jobs:
         ports: ["5432:5432"]
         options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
       mariadb:
-        image: mariadb:11
+        image: mariadb:13
         env: {MARIADB_ROOT_PASSWORD: pw, MARIADB_DATABASE: ha}
         ports: ["3306:3306"]
         options: --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 10
