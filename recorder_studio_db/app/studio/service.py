@@ -35,6 +35,7 @@ class Studio:
             self.data["options"]["db_url"] = "mysql://" + url[len("mysql+pymysql://"):]
         self.pending_restart = False
         self.live: dict[str, Any] | None = None
+        self.integration_checked = 0.0  # time.monotonic() of the last check of the bundled integration
         self.integration: dict[str, Any] = {"state": "unknown", "version": bundled.source_version(), "loaded": None, "message": None}
         self.copy_progress = history_copy.Progress()
         self._copy_task: asyncio.Task | None = None
@@ -96,6 +97,7 @@ class Studio:
         state: ready | restart_needed | error. Raises HAError when Home Assistant cannot be reached (callers retry).
         """
         info = self.integration
+        self.integration_checked = time.monotonic()
         info["version"] = bundled.source_version()
         try:
             await asyncio.to_thread(bundled.install, self.config_dir)

@@ -340,3 +340,15 @@ async def test_integration_check_does_not_apply_anything_and_spots_old_code(stud
     info = await studio.ensure_integration()
     assert info["state"] == "restart_needed"  # the running code predates the status service: restart to load the new files
     assert ("recorder_studio_db", "apply_config", None) not in studio.ha.calls
+
+
+async def test_panel_notices_by_itself_that_the_integration_runs_after_a_restart(client, studio):
+    studio.ha.own_version = "0.0.1"
+    status, body = await cmd(client, type="recorder_studio/get_state")
+    assert body["result"]["integration"]["state"] == "restart_needed"
+    studio.ha.own_version = studio.integration["version"]  # Home Assistant restarted and loaded the installed version
+    status, body = await cmd(client, type="recorder_studio/get_state")
+    assert body["result"]["integration"]["state"] == "restart_needed"  # not re-checked more than every 15 s
+    studio.integration_checked -= 20
+    status, body = await cmd(client, type="recorder_studio/get_state")
+    assert body["result"]["integration"]["state"] == "ready"

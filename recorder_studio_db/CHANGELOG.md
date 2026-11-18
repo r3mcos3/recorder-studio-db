@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.6
+- The panel notices by itself (within ~15 s) that Home Assistant runs the integration after a restart; the "restart needed" banner disappears without pressing *Check again*.
+
 ## 0.6.5
 - The integration now has a logo in Settings > Devices & services.
 

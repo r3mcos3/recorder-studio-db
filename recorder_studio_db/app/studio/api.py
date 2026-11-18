@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -57,6 +59,10 @@ async def _config_info(s: Studio) -> dict[str, Any]:
 
 async def get_state(s: Studio, msg: dict) -> dict:
     await s.refresh_entities()
+    if s.integration["state"] != "ready" and time.monotonic() - s.integration_checked > 15:
+        # e.g. Home Assistant was restarted meanwhile: notice that the integration runs now, without a button press
+        with contextlib.suppress(Exception):
+            await s.ensure_integration()
     d = s.data
     return {
         "version": ADDON_VERSION,
