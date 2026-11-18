@@ -336,6 +336,29 @@ async def db_deactivate(s: Studio, msg: dict) -> dict:
     return {"configured": False}
 
 
+async def history_status(s: Studio, msg: dict) -> dict:
+    running = bool(s.server and s.server.running)
+    return {
+        **s.copy_progress.as_dict(),
+        "available": running,
+        "engine": s.server.engine if s.server else None,
+        "sources": s.sqlite_sources(),
+        "default_source": s.sqlite_file,
+        "done_before": s.data["history_copies"],
+    }
+
+
+async def history_copy_start(s: Studio, msg: dict) -> dict:
+    """Copy the history of a SQLite file into the add-on's PostgreSQL/MariaDB (Home Assistant may keep recording)."""
+    _need_write()
+    _need_confirm(msg)
+    try:
+        await s.start_history_copy(msg.get("source"), bool(msg.get("force")))
+    except ValueError as err:
+        raise ApiError("history_copy", str(err)) from None
+    return {"started": True}
+
+
 COMMANDS = {f.__name__: f for f in (
     get_state, set_recorded, save_settings, analyze, preview_purge, purge, repack, restart, remove_orphans, save_alerts,
-    dismiss_suggestions, backup_status, db_status, db_set_engine, db_activate, db_deactivate, migration_sources, migration_preview, migration_import, migration_activate)}
+    dismiss_suggestions, backup_status, db_status, history_status, history_copy_start, db_set_engine, db_activate, db_deactivate, migration_sources, migration_preview, migration_import, migration_activate)}

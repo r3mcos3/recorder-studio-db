@@ -106,17 +106,17 @@ class DatabaseServer:
             raise RuntimeError(f"{' '.join(cmd[:3])} failed ({proc.returncode}): {text[-400:]}")
         return text
 
-    def connect(self):
-        """DB-API connection to the local server (used for statistics and status)."""
+    def connect(self, write: bool = False):
+        """DB-API connection to the local server: read-only for statistics and status, writable for the history copy."""
         if self.engine == "postgresql":
             import psycopg2
 
             conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname=DB_NAME, user=self.creds["user"], password=self.creds["password"], connect_timeout=10)
-            conn.set_session(readonly=True, autocommit=True)
+            conn.set_session(readonly=not write, autocommit=not write)
             return conn
         import pymysql
 
-        return pymysql.connect(host="127.0.0.1", port=3306, database=DB_NAME, user=self.creds["user"], password=self.creds["password"], connect_timeout=10, autocommit=True)
+        return pymysql.connect(host="127.0.0.1", port=3306, database=DB_NAME, user=self.creds["user"], password=self.creds["password"], connect_timeout=10, autocommit=not write)
 
     # ---- lifecycle ----------------------------------------------------
     async def start(self) -> None:

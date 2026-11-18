@@ -3,7 +3,7 @@
 A Home Assistant **add-on** that runs and manages the recorder database, with [Recorder Studio](https://github.com/r3mcos3/recorder-studio)
 built in: see what fills the database, choose what is recorded, purge and repack safely.
 
-**Status: phase 2 (0.2.x).** SQLite mode and experimental PostgreSQL/MariaDB engines run by the add-on itself. The old history is not moved yet (phase 3).
+**Status: phase 3 (0.4.x).** SQLite mode, experimental PostgreSQL/MariaDB engines run by the add-on itself, and copying the SQLite history into them.
 offers the full Recorder Studio panel (statistics, per-device/entity choices, suggestions, growth, alerts, migration, purge/repack)
 through the sidebar.
 
@@ -11,7 +11,7 @@ through the sidebar.
 
 1. ✅ **SQLite mode + panel via ingress**
 2. ✅ **PostgreSQL and MariaDB engines** run by the add-on, with a Database tab (experimental, tested in CI with real servers)
-3. Database-specific statistics and migration between engines, with a backup first
+3. ✅ **Copy the history** from SQLite into PostgreSQL/MariaDB (the SQLite file stays as the backup); copying back and engine-specific statistics are still open
 4. Extra database info: table sizes, growth, fragmentation
 
 ## Install

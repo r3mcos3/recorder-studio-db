@@ -176,3 +176,43 @@ async def test_old_pymysql_url_is_migrated(tmp_path):
     store.save(sp, data)
     studio = Studio(None, config_dir=tmp_path, store_path=sp)
     assert studio.data["options"]["db_url"] == "mysql://u:p@h:3306/db?charset=utf8mb4"
+
+
+async def test_history_copy_through_the_api(client, studio, tmp_path):
+    import sqlite3
+    from test_history_copy import build_source, build_target
+
+    cfg = tmp_path / "config"
+    build_source(cfg / "old.db")
+    dst = tmp_path / "dst.db"
+    build_target(dst)
+
+    class SqlServer(FakeServer):
+        dialect = "sqlite"
+
+        def connect(self, write=False):
+            return sqlite3.connect(dst)
+
+    studio.server = SqlServer("postgresql")
+    status, body = await cmd(client, type="recorder_studio/history_status")
+    assert status == 200 and body["result"]["available"] is False and "old.db" in body["result"]["sources"]
+    status, body = await cmd(client, type="recorder_studio/history_copy_start", source="old.db", confirm=True)
+    assert status == 400 and "Start PostgreSQL" in body["message"]
+    await studio.server.start()
+    status, body = await cmd(client, type="recorder_studio/history_copy_start", source="old.db")
+    assert body["code"] == "confirm_required"
+    status, body = await cmd(client, type="recorder_studio/history_copy_start", source="../x.db", confirm=True)
+    assert status == 400
+    status, body = await cmd(client, type="recorder_studio/history_copy_start", source="old.db", confirm=True)
+    assert status == 200
+    await studio._copy_task
+    status, body = await cmd(client, type="recorder_studio/history_status")
+    r = body["result"]
+    assert r["state"] == "done" and r["copied"]["states"] == 3 and r["done"] == r["total"]
+    assert r["done_before"][0]["source"] == "old.db"
+    # a second copy would duplicate everything
+    status, body = await cmd(client, type="recorder_studio/history_copy_start", source="old.db", confirm=True)
+    assert status == 400 and "already copied" in body["message"]
+    status, body = await cmd(client, type="recorder_studio/history_copy_start", source="old.db", confirm=True, force=True)
+    assert status == 200
+    await studio._copy_task

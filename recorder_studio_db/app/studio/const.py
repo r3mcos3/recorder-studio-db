@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-ADDON_VERSION = "0.3.2"
+ADDON_VERSION = "0.4.0"
 def _config_dir() -> Path:
     """`homeassistant_config` is mounted at /homeassistant (the add-on's own /config is a different folder)."""
     if os.environ.get("CONFIG_DIR"):
@@ -35,6 +35,7 @@ DEFAULT_DATA = {
     "alerts": {"enabled": True, "free_percent": 10, "growth_percent": 25},
     "engine": None,  # chosen in the panel; None = use the add-on option
     "sqlite_file": None,
+    "history_copies": [],  # finished history copies: {source, engine, at, copied}
 }
 
 ALERT_INTERVAL_HOURS = 6

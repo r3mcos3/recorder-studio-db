@@ -56,6 +56,8 @@ class RecorderStudioPanel extends LitElement {
     narrow: { type: Boolean },
     _tab: { state: true },
     _db: { state: true },
+    _hist: { state: true },
+    _histSource: { state: true },
     _dbEngine: { state: true },
     _dbFile: { state: true },
     _data: { state: true },
@@ -84,6 +86,9 @@ class RecorderStudioPanel extends LitElement {
     super();
     this._tab = "overview";
     this._db = null;
+    this._hist = null;
+    this._histSource = null;
+    this._histTimer = null;
     this._dbEngine = null;
     this._dbFile = null;
     this._data = null;
@@ -700,7 +705,71 @@ class RecorderStudioPanel extends LitElement {
       this._db = r;
       this._dbEngine = r.engine;
       this._dbFile = r.sqlite_file;
+      await this._loadHist();
     }
+  }
+
+  async _loadHist() {
+    clearTimeout(this._histTimer);
+    try {
+      const h = await this._ws("history_status");
+      this._hist = h;
+      if (!this._histSource || !h.sources.includes(this._histSource)) this._histSource = h.default_source;
+      if (h.state === "running" && this._tab === "database") this._histTimer = setTimeout(() => this._loadHist(), 2000);
+    } catch (err) {
+      this._hist = null;
+    }
+  }
+
+  disconnectedCallback() {
+    clearTimeout(this._histTimer);
+    super.disconnectedCallback();
+  }
+
+  _histStart(force = false) {
+    const x = this._db;
+    const names = { postgresql: "PostgreSQL", mariadb: "MariaDB" };
+    const source = this._histSource;
+    this._confirm({
+      title: "Copy history",
+      body: `The history in ${source} (states, events, statistics) is copied into ${names[x.engine]}. ${source} is only read and stays untouched as your backup. Home Assistant may keep recording meanwhile; new data is not overwritten. This can take several minutes for a large database.${force ? " It was copied before, so copying again duplicates the old history." : ""}`,
+      confirmLabel: "Copy",
+      danger: false,
+      onConfirm: async () => {
+        const r = await this._run("db", () => this._ws("history_copy_start", { source, confirm: true, force }), { success: "Copying started." });
+        if (r) await this._loadHist();
+      },
+    });
+  }
+
+  _cardHistory() {
+    const x = this._db;
+    const h = this._hist;
+    if (!h || x.engine === "sqlite") return nothing;
+    const names = { postgresql: "PostgreSQL", mariadb: "MariaDB" };
+    const pct = h.total ? Math.min(100, Math.round((h.done / h.total) * 100)) : 0;
+    const was = h.done_before.find((c) => c.source === this._histSource && c.engine === x.engine);
+    const ready = x.state === "running" && h.sources.length;
+    return html`
+      <div class="card">
+        <h3>Copy history <span class="muted">SQLite → ${names[x.engine]}</span></h3>
+        <p>New databases start empty. Copy the history of an existing SQLite file here, so graphs and statistics continue. The source file is never changed.</p>
+        <p class="muted">Order: 1) switch to ${names[x.engine]}, 2) “Use this database for the recorder” and restart Home Assistant (it creates the tables), 3) copy.</p>
+        <div class="row" style="align-items:center;flex-wrap:wrap;gap:8px">
+          <label>Copy from
+            <select .value=${this._histSource || ""} @change=${(e) => (this._histSource = e.target.value)}>
+              ${h.sources.map((n) => html`<option value=${n} ?selected=${n === this._histSource}>${n}</option>`)}
+            </select>
+          </label>
+          <button class="btn primary" ?disabled=${this._ro || !!this._busy || !ready || h.state === "running"} @click=${() => this._histStart(!!was)}>${was ? "Copy again…" : "Copy history…"}</button>
+        </div>
+        ${was ? html`<p class="muted">Already copied on ${was.at.replace("T", " ")} (${fmtNum(was.copied.states || 0)} states).</p>` : nothing}
+        ${h.state === "running" ? html`
+          <p>Copying <b>${h.step}</b> · ${fmtNum(h.done)} of ${fmtNum(h.total)} rows (${pct}%)</p>
+          <div style="height:8px;border-radius:4px;background:var(--divider-color,#ccc);overflow:hidden"><div style=${`height:100%;width:${pct}%;background:var(--primary-color)`}></div></div>`
+        : h.state === "done" ? html`<div class="banner info">${icon("check", 16)}<span>Copied ${fmtNum(h.done)} rows from ${h.source}.</span></div>`
+        : h.state === "error" ? html`<div class="banner warn">${icon("warn")}<span>${h.error}</span></div>` : nothing}
+      </div>`;
   }
 
   _dbChooseEngine() {
@@ -728,7 +797,7 @@ class RecorderStudioPanel extends LitElement {
     this._confirm({
       title: on ? "Use this database for the recorder" : "Back to the default SQLite database",
       body: on
-        ? `The recorder will write to ${x.target_url || "the SQLite file " + x.sqlite_file} after the next Home Assistant restart.${server ? " It starts with an EMPTY history: your existing history stays in the old SQLite file (moving it is a later feature)." : ""}`
+        ? `The recorder will write to ${x.target_url || "the SQLite file " + x.sqlite_file} after the next Home Assistant restart.${server ? " It starts with an EMPTY history: afterwards use “Copy history” to bring the old history over." : ""}`
         : "The db_url is removed from recorder_studio.yaml, so Home Assistant uses its default SQLite file again after the next restart.",
       confirmLabel: on ? "Use it" : "Switch back",
       danger: false,
@@ -776,7 +845,8 @@ class RecorderStudioPanel extends LitElement {
           ${x.current_url || !x.default_sqlite ? html`<button class="btn danger-o" ?disabled=${this._ro || !!this._busy} @click=${() => this._dbAction("deactivate")}>Back to default SQLite…</button>` : nothing}
           <button class="btn" ?disabled=${!!this._busy} @click=${() => this._loadDb()}>Refresh</button>
         </div>
-      </div>`;
+      </div>
+      ${this._cardHistory()}`;
   }
 
   _tMaintenance() {

@@ -15,10 +15,12 @@ plus an optional database server run by this add-on.
 
 1. Open the **Database** tab, choose the engine and press *Switch engine*.
 2. Wait for the status to say *Running*.
-3. Click *Use this database for the recorder* and restart Home Assistant.
+3. Click *Use this database for the recorder* and restart Home Assistant (it creates its tables).
+4. Optional: in the card *Copy history*, choose your old SQLite file and press *Copy history*.
 
-Home Assistant then starts with an **empty** history in the new database. Your old history stays in the SQLite file;
-moving it over is planned. To go back, use *Back to default SQLite* and restart Home Assistant.
+Without step 4 Home Assistant starts with an **empty** history in the new database. The copy only reads the SQLite file,
+so it stays as your backup, and Home Assistant may keep recording meanwhile. A large database (millions of rows) takes
+several minutes; the panel shows the progress. To go back, use *Back to default SQLite* and restart Home Assistant.
 
 The database lives in the add-on's data folder. Add-on backups stop the add-on first, so the copy is consistent.
 

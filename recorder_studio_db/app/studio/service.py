@@ -12,7 +12,7 @@ from typing import Any
 from . import store
 from .const import ACTIVE_WINDOW, ENGINES, ATTR_REFRESH_SECONDS, CONFIG_DIR, CONFIG_FILE, DATA_DIR, DEFAULT_SQLITE_FILE, GENERATED_FILE, LEGACY_FILE, STORE_FILE, addon_options, sqlite_file
 from . import engines
-from .core import alerts, db_stats, db_stats_sql, history, suggestions, tree, yaml_writer
+from .core import history_copy, alerts, db_stats, db_stats_sql, history, suggestions, tree, yaml_writer
 from .ha import HAClient, HAError
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,6 +34,8 @@ class Studio:
         if isinstance(url, str) and url.startswith("mysql+pymysql://"):  # 0.3.0 wrote a driver Home Assistant does not ship
             self.data["options"]["db_url"] = "mysql://" + url[len("mysql+pymysql://"):]
         self.pending_restart = False
+        self.copy_progress = history_copy.Progress()
+        self._copy_task: asyncio.Task | None = None
         self.active_alerts: list[str] = []
         self._rows: list[dict[str, Any]] = []
         self._names: dict[str, str] = {}
@@ -100,6 +102,39 @@ class Studio:
                 await self.server.start()
         self.backend = "sqlite"
         await self.save()
+
+    def sqlite_sources(self) -> list[str]:
+        """SQLite files in the config folder that can be copied from."""
+        try:
+            return sorted(p.name for p in self.config_dir.iterdir() if p.suffix in (".db", ".sqlite", ".sqlite3") and p.is_file())
+        except OSError:
+            return []
+
+    async def start_history_copy(self, source: str | None = None, force: bool = False) -> None:
+        """Copy the history of a SQLite file into the server this add-on runs (in the background)."""
+        if not (self.server and self.server.running):
+            raise ValueError("Start PostgreSQL or MariaDB first (Switch engine) and wait until it is running.")
+        if self._copy_task and not self._copy_task.done():
+            raise ValueError("A copy is already running.")
+        name = (source or "").strip() or self.sqlite_file
+        if "/" in name or ".." in name or name not in self.sqlite_sources():
+            raise ValueError(f"{name} is not a SQLite file in the config folder.")
+        engine = self.server.engine
+        if not force and any(c.get("source") == name and c.get("engine") == engine for c in self.data["history_copies"]):
+            raise ValueError(f"The history of {name} was already copied into {engine}. Copying again would duplicate it.")
+        server, path = self.server, str(self.config_dir / name)
+        progress = self.copy_progress = history_copy.Progress()
+        progress.source, progress.engine = name, engine
+
+        async def job() -> None:
+            await asyncio.to_thread(history_copy.run, path, lambda: server.connect(write=True), server.dialect, progress)
+            if progress.state == "done":
+                self.data["history_copies"].append({"source": name, "engine": engine, "at": datetime.now().isoformat(timespec="seconds"), "copied": progress.copied})
+                await self.save()
+            _LOGGER.info("history copy %s -> %s: %s", name, engine, progress.state if progress.state == "done" else progress.error)
+
+        progress.state = "running"
+        self._copy_task = asyncio.create_task(job())
 
     async def _uses_server(self) -> bool:
         """True when Home Assistant is currently recording into the database server run by this add-on."""

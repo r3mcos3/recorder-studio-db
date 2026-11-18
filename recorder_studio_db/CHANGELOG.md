@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+- New: **Copy history** (Database tab). Copies the history of a SQLite file (states, events, statistics) into the add-on's PostgreSQL/MariaDB, so graphs and statistics continue after switching.
+- The SQLite source is only read and stays untouched as your backup. Home Assistant may keep recording while copying; existing rows are never overwritten.
+- A second copy of the same file is refused unless you confirm it (it would duplicate the history).
+
 ## 0.3.2
 - An already stored `mysql+pymysql://` URL is converted to `mysql://` on start.
 
