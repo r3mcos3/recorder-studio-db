@@ -72,3 +72,8 @@ def test_old_table_names_do_not_break_extras(synthetic_db):
 def test_states_count_prefers_the_exact_total():
     m = metrics.build(stats(total_records=651_900), {}, "MariaDB")
     assert m["sensors"]["states_count"] == 651_900  # not the catalog estimate (480)
+
+
+def test_version_label_is_short():
+    assert metrics.build(stats(), {}, "MariaDB", "11.8.9-MariaDB")["sensors"]["engine"] == "MariaDB 11.8.9"
+    assert metrics.build(stats(), {}, "PostgreSQL", "16.4 (Debian 16.4-1.pgdg120+2)")["sensors"]["engine"] == "PostgreSQL 16.4"

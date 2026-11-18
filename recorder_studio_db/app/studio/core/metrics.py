@@ -6,6 +6,7 @@ sensor shows as unavailable instead of a made-up number.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from typing import Any
 
 STATISTICS_TABLES = ("statistics", "statistics_short_term", "statistics_meta", "statistics_runs")
@@ -16,6 +17,12 @@ ATTRIBUTE_TABLES = ("state_attributes",)
 def _sum(tables: dict[str, int], names: tuple[str, ...]) -> int | None:
     found = [tables[n] for n in names if n in tables]
     return sum(found) if found else None
+
+
+def _short_version(version: str | None) -> str:
+    """"11.8.9-MariaDB" -> "11.8.9", "16.4 (Debian 16.4-1)" -> "16.4"."""
+    match = re.match(r"\d+(\.\d+)*", str(version or "").strip())
+    return match.group(0) if match else str(version or "")
 
 
 def fragmentation(stats: dict[str, Any]) -> tuple[float | None, int | None]:
@@ -45,7 +52,7 @@ def build(stats: dict[str, Any], growth: dict[str, Any], engine: str, version: s
         per_day = growth.get("bytes_per_day") or None
     total = int(stats.get("db_size_bytes") or 0)
     sensors = {
-        "engine": f"{engine} {version}".strip() if version else engine,
+        "engine": f"{engine} {_short_version(version)}".strip() if version else engine,
         "database_size": total or None,
         "states_size": sizes.get("states"),
         "attributes_size": _sum(sizes, ATTRIBUTE_TABLES),

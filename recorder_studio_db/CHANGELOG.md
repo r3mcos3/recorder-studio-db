@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.3
+- Engine sensor: "MariaDB 11.8.9" instead of "MariaDB 11.8.9-MariaDB" (cosmetic).
+
 ## 0.7.2
 - Fix: the engine sensor said "SQLite 11.8.9-MariaDB" right after the add-on started. The engine name is now stored with the measurement.
 - Row counts for PostgreSQL/MariaDB are counted exactly (time-limited) instead of using the catalog estimate, which was up to 9% off. The "States" figure is the exact total.
