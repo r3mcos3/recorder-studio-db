@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.5
+- Same as 0.8.4 (phone layout, data loss warning), with a fix: `config.yaml` of 0.8.4 was not valid YAML, so Home Assistant never offered that version. Tests now check that the file parses.
+
 ## 0.8.4
 - Database tab on a phone: the table with table sizes was wider than the screen and pushed the page sideways. It now fits (the Share bars are hidden on narrow screens) and scrolls sideways if it is still too wide.
 - A clear warning in the README and the add-on documentation: use at your own risk, the author is not responsible for data loss, make a backup first.
