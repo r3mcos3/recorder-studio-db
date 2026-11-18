@@ -12,6 +12,68 @@
     "status": {
       "name": "Status",
       "description": "Returns the version of this integration. Changes nothing."
+    },
+    "update_metrics": {
+      "name": "Update database metrics",
+      "description": "Used by the add-on: hands over the measured database figures to the sensors.",
+      "fields": {
+        "metrics": {
+          "name": "Metrics",
+          "description": "Sensor key to value."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "database_size": {
+        "name": "Database size"
+      },
+      "states_size": {
+        "name": "States table size"
+      },
+      "attributes_size": {
+        "name": "Attributes table size"
+      },
+      "events_size": {
+        "name": "Events tables size"
+      },
+      "statistics_size": {
+        "name": "Statistics tables size"
+      },
+      "states_count": {
+        "name": "States"
+      },
+      "events_count": {
+        "name": "Events"
+      },
+      "statistics_count": {
+        "name": "Statistics rows"
+      },
+      "records_per_day": {
+        "name": "Records per day"
+      },
+      "oldest_record": {
+        "name": "Oldest record"
+      },
+      "growth_per_day": {
+        "name": "Growth per day"
+      },
+      "fragmentation": {
+        "name": "Unused space"
+      },
+      "reclaimable": {
+        "name": "Reclaimable space"
+      },
+      "disk_free": {
+        "name": "Disk free"
+      },
+      "days_to_full": {
+        "name": "Days until disk is full"
+      },
+      "engine": {
+        "name": "Database engine"
+      }
     }
   }
 }

@@ -1,2 +1,8 @@
 apply_config:
 status:
+update_metrics:
+  fields:
+    metrics:
+      required: true
+      selector:
+        object:

@@ -5,6 +5,9 @@ from pathlib import Path
 DOMAIN = "recorder_studio_db"
 CONFIG_FILE = "configuration.yaml"
 GENERATED_FILE = "recorder_studio.yaml"
+SIGNAL_METRICS = f"{DOMAIN}_metrics_updated"
+STORAGE_KEY = f"{DOMAIN}.metrics"
+STORAGE_VERSION = 1
 
 
 def _manifest_version() -> str:

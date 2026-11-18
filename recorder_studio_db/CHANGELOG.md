@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+- **Database details** (Database tab): size, growth per day, how far the history goes back, unused space / fragmentation, free disk with a days-until-full forecast, and rows + size + share per table. Works for SQLite, PostgreSQL and MariaDB (PostgreSQL shows its share of dead rows instead of free pages; row counts of PostgreSQL/MariaDB are estimates).
+- **16 sensors** in Home Assistant (device *Recorder Studio DB*, category diagnostic): database size, states / attributes / events / statistics table sizes and counts, records per day, oldest record, growth per day, unused space, reclaimable space, disk free, days until full and the engine. They refresh every 30 minutes, also while the panel is closed, and keep their last value across restarts.
+- The integration changed (sensors): **restart Home Assistant once** after updating.
+
 ## 0.6.6
 - The integration has its own version number now (0.6.5): a Home Assistant restart is only asked when the integration code changes, not for every add-on release.
 - The panel notices by itself (within ~15 s) that Home Assistant runs the integration after a restart; the "restart needed" banner disappears without pressing *Check again*.

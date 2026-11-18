@@ -142,6 +142,26 @@ def estimate_daily_bytes(stats: dict[str, Any], sizes: dict[str, int]) -> int:
     return int(total)
 
 
+ROW_TABLES = ("states", "events", "state_attributes", "event_data", "statistics", "statistics_short_term")
+
+
+def extras(conn: sqlite3.Connection, present: set[str]) -> dict[str, Any]:
+    """Row counts per table and the age of the history (exact; cheap next to the page-level size scan)."""
+    rows: dict[str, int] = {}
+    for table in ROW_TABLES:
+        if table in present:
+            try:
+                rows[table] = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
+            except sqlite3.Error:
+                pass
+    oldest = None
+    try:
+        oldest = conn.execute("SELECT MIN(last_updated_ts) FROM states").fetchone()[0]
+    except sqlite3.Error:
+        pass
+    return {"table_rows": rows, "oldest_ts": float(oldest) if oldest is not None else None, "dead_ratio": None, "rows_estimated": False}
+
+
 def analyze(db_path: Path, full: bool = True, attrs: bool = False) -> dict[str, Any]:
     """Per-entity state counts. Opens the database strictly read-only.
 
@@ -164,6 +184,7 @@ def analyze(db_path: Path, full: bool = True, attrs: bool = False) -> dict[str, 
             sql = "SELECT entity_id, COUNT(*) FROM states GROUP BY entity_id ORDER BY 2 DESC"
         counts = {e: c for e, c in conn.execute(sql) if e}
         recent = recent_counts(conn)
+        extra = extras(conn, tables) if full else None
         tables = table_sizes(conn) if full else None
         free = free_bytes(conn) if full else None
         attr = attribute_bytes(conn) if (full and attrs) else None
@@ -177,6 +198,8 @@ def analyze(db_path: Path, full: bool = True, attrs: bool = False) -> dict[str, 
         "files": file_sizes(db_path),
         "tables": tables,
         "free_bytes": free,
+        "extra": extra,
+        "version": sqlite3.sqlite_version if full else None,
         "recent_counts": recent,
         "recent_total": sum(recent.values()),
         "attr_bytes": attr,

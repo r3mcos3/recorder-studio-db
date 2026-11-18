@@ -345,6 +345,11 @@ async def db_deactivate(s: Studio, msg: dict) -> dict:
     return {"configured": False, "live": live}
 
 
+async def db_metrics(s: Studio, msg: dict) -> dict:
+    """Detailed database figures: sizes per table, rows, fragmentation, growth (also what the sensors show)."""
+    return await s.metrics()
+
+
 async def integration_status(s: Studio, msg: dict) -> dict:
     return dict(s.integration)
 
@@ -382,4 +387,4 @@ async def history_copy_start(s: Studio, msg: dict) -> dict:
 
 COMMANDS = {f.__name__: f for f in (
     get_state, set_recorded, save_settings, analyze, preview_purge, purge, repack, restart, remove_orphans, save_alerts,
-    dismiss_suggestions, backup_status, db_status, integration_status, integration_ensure, history_status, history_copy_start, db_set_engine, db_activate, db_deactivate, migration_sources, migration_preview, migration_import, migration_activate)}
+    dismiss_suggestions, backup_status, db_status, db_metrics, integration_status, integration_ensure, history_status, history_copy_start, db_set_engine, db_activate, db_deactivate, migration_sources, migration_preview, migration_import, migration_activate)}

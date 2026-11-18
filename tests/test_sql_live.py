@@ -71,6 +71,9 @@ def test_analyze_against_real_server(dialect, connect, enabled):
     assert res["db_size_bytes"] > 0
     assert any(t["name"] == "states" for t in res["tables"])
     assert res["attr_bytes"] and res["attr_bytes"]["sensor.a"] > 0
+    assert res["version"] and res["extra"]["oldest_ts"] is not None and res["extra"]["rows_estimated"] is True
+    if dialect == "postgresql":
+        assert 0.0 <= res["extra"]["dead_ratio"] <= 1.0
     conn = connect()
     try:
         assert abs(db_stats_sql.latest_ts(conn) - time.time()) < 60

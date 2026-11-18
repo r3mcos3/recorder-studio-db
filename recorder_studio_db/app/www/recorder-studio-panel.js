@@ -57,6 +57,7 @@ class RecorderStudioPanel extends LitElement {
     _tab: { state: true },
     _db: { state: true },
     _hist: { state: true },
+    _metrics: { state: true },
     _histSource: { state: true },
     _dbEngine: { state: true },
     _dbFile: { state: true },
@@ -87,6 +88,7 @@ class RecorderStudioPanel extends LitElement {
     this._tab = "overview";
     this._db = null;
     this._hist = null;
+    this._metrics = null;
     this._histSource = null;
     this._histTimer = null;
     this._dbEngine = null;
@@ -722,7 +724,50 @@ class RecorderStudioPanel extends LitElement {
       this._dbEngine = r.engine;
       this._dbFile = r.sqlite_file;
       await this._loadHist();
+      try {
+        this._metrics = await this._ws("db_metrics");
+      } catch (err) {
+        this._metrics = null;
+      }
     }
+  }
+
+  _cardDetails() {
+    const m = this._metrics;
+    const x = this._db;
+    if (!m || !x) return nothing;
+    const k = m.sensors;
+    const dash = (v, f = (a) => a) => (v === null || v === undefined ? "—" : f(v));
+    const oldest = k.oldest_record ? new Date(k.oldest_record) : null;
+    const days = oldest ? Math.max(1, Math.round((Date.now() - oldest.getTime()) / 86400000)) : null;
+    const frag = k.fragmentation;
+    const fragHint = frag === null || frag === undefined ? "" : m.fragmentation_kind === "dead_tuples"
+      ? "Share of dead rows. PostgreSQL cleans these itself (autovacuum); a repack (VACUUM FULL) returns the space to the disk."
+      : frag >= 20 ? `About ${fmtBytes(k.reclaimable || 0)} is unused space inside the database. A repack on the Maintenance tab gives it back to the disk.` : "Unused space inside the database file. Low is fine.";
+    return html`
+      <div class="card">
+        <h3>Database details <span class="muted">${k.engine}</span></h3>
+        <div class="stats">
+          ${this._stat("Size", dash(k.database_size, fmtBytes), k.growth_per_day ? `+${fmtBytes(k.growth_per_day)} per day` : "growth not known yet")}
+          ${this._stat("History", oldest ? `${fmtNum(days)} days` : "—", oldest ? `since ${oldest.toLocaleDateString()}` : "")}
+          ${this._stat("Records per day", dash(k.records_per_day, fmtNum), k.states_count ? `${m.rows_estimated ? "≈ " : ""}${fmtNum(k.states_count)} states in total` : "")}
+          ${this._stat("Unused space", dash(frag, (v) => `${v}%`), m.fragmentation_kind === "dead_tuples" ? "dead rows" : "free pages")}
+          ${this._stat("Disk free", dash(k.disk_free, fmtBytes), k.days_to_full ? `full in ≈ ${fmtNum(k.days_to_full)} days` : "")}
+        </div>
+        ${fragHint ? html`<p class="muted">${fragHint}</p>` : nothing}
+        <table class="tbl">
+          <thead><tr><th>Table</th><th class="num">Size</th><th class="num">${m.rows_estimated ? "Rows ≈" : "Rows"}</th><th>Share</th></tr></thead>
+          <tbody>
+            ${m.tables.map((t) => html`<tr>
+              <td><code>${t.name}</code></td>
+              <td class="num">${fmtBytes(t.bytes)}</td>
+              <td class="num">${dash(t.rows, fmtNum)}</td>
+              <td><div style="height:6px;border-radius:3px;background:var(--divider-color,#ccc);min-width:60px"><div style=${`height:100%;border-radius:3px;width:${Math.min(100, t.share || 0)}%;background:var(--primary-color)`}></div></div></td>
+            </tr>`)}
+          </tbody>
+        </table>
+        <p class="muted">These figures are also available as sensors in Home Assistant (device “Recorder Studio DB”).</p>
+      </div>`;
   }
 
   async _loadHist() {
@@ -887,6 +932,7 @@ class RecorderStudioPanel extends LitElement {
           <button class="btn" ?disabled=${!!this._busy} @click=${() => this._loadDb()}>Refresh</button>
         </div>
       </div>
+      ${this._cardDetails()}
       ${this._cardHistory()}
       ${this._cardIntegration()}`;
   }
@@ -1089,6 +1135,7 @@ class RecorderStudioPanel extends LitElement {
     main { padding-top: 16px; }
     /* overview */
     .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 12px; } .stat { margin: 0; } .stat .k { color: var(--rs-muted); font-size: .85rem; } .stat .v { font-size: 1.9rem; font-weight: 500; margin: 4px 0; font-variant-numeric: tabular-nums; } .stat .s { color: var(--rs-muted); font-size: .8rem; } .stat.good .v { color: var(--rs-ok); } .stat.warn .v { color: var(--rs-warn); }
+    .tbl { width: 100%; border-collapse: collapse; margin-top: 8px; } .tbl th, .tbl td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--divider-color, #444); } .tbl th { color: var(--rs-muted); font-weight: 500; font-size: .85rem; } .tbl .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .grid2 { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; } @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
     .bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; } .bars li { display: grid; grid-template-columns: minmax(80px, 34%) 1fr auto; gap: 10px; align-items: center; font-size: .85rem; }
     .bars .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, monospace; font-size: .78rem; } .bar { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); border-radius: 4px; height: 10px; overflow: hidden; } .bar i { display: block; height: 100%; background: var(--primary-color); border-radius: 4px; } .bars .ex .bar i { background: var(--rs-warn); } .bars .ex .lbl::after { content: " ⚑"; } .val { font-variant-numeric: tabular-nums; color: var(--rs-muted); min-width: 110px; text-align: right; } .val b, .recs b { color: var(--primary-text-color); font-weight: 500; display: inline-block; min-width: 44px; }

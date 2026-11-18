@@ -12,7 +12,7 @@ from typing import Any
 from . import store
 from .const import ACTIVE_WINDOW, ENGINES, ATTR_REFRESH_SECONDS, CONFIG_DIR, CONFIG_FILE, DATA_DIR, DEFAULT_SQLITE_FILE, GENERATED_FILE, LEGACY_FILE, STORE_FILE, addon_options, sqlite_file
 from . import engines, integration as bundled
-from .core import history_copy, alerts, db_stats, db_stats_sql, history, suggestions, tree, yaml_writer
+from .core import metrics as metrics_core, history_copy, alerts, db_stats, db_stats_sql, history, suggestions, tree, yaml_writer
 from .ha import HAClient, HAError
 
 _LOGGER = logging.getLogger(__name__)
@@ -260,7 +260,7 @@ class Studio:
                 if stats.get("attr_bytes") is None:
                     stats["attr_bytes"] = previous.get("attr_bytes")
             else:
-                for key in ("tables", "free_bytes", "full_at", "attr_bytes", "attr_tried"):
+                for key in ("tables", "free_bytes", "full_at", "attr_bytes", "attr_tried", "extra", "version"):
                     stats[key] = previous.get(key)
                 stats["tables"] = stats["tables"] or []
                 stats["free_bytes"] = stats["free_bytes"] or 0
@@ -273,7 +273,28 @@ class Studio:
         d["stats"] = stats
         if save:
             await self.save()
+        if full and not stats.get("error"):
+            await self.push_metrics()
         return stats
+
+    # ---- metrics (panel card + Home Assistant sensors) ------------------
+    async def metrics(self) -> dict[str, Any]:
+        names = {"sqlite": "SQLite", "postgresql": "PostgreSQL", "mariadb": "MariaDB"}
+        engine = names[self.server.engine] if self.backend == "sql" and self.server else "SQLite"
+        stats = self.data.get("stats") or {}
+        return metrics_core.build(stats, await self.growth(), engine, stats.get("version"))
+
+    async def push_metrics(self) -> bool:
+        """Hand the latest figures to the bundled integration (its sensors). Quietly does nothing while it is not running."""
+        try:
+            m = await self.metrics()
+            if not any(v is not None for k, v in m["sensors"].items() if k != "engine"):
+                return False
+            await self.ha.call_service(bundled.DOMAIN, "update_metrics", {"metrics": m["sensors"]})
+            return True
+        except Exception as err:  # noqa: BLE001 - Home Assistant down, integration not loaded yet, ...
+            _LOGGER.debug("metrics not pushed: %s", err)
+            return False
 
     # ---- entities ----------------------------------------------------
     async def refresh_entities(self) -> None:

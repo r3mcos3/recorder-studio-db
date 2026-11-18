@@ -57,6 +57,21 @@ async def _background(app: web.Application) -> None:
         await asyncio.sleep(ALERT_INTERVAL_HOURS * 3600)
 
 
+METRICS_INTERVAL = 30 * 60  # seconds between background measurements for the sensors
+
+
+async def _metrics(app: web.Application) -> None:
+    """Keeps the Home Assistant sensors current while the panel is closed (a full analysis also feeds the history)."""
+    studio: Studio = app["studio"]
+    await asyncio.sleep(90)
+    while True:
+        try:
+            await studio.analyze(full=True)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("metrics refresh failed")
+        await asyncio.sleep(METRICS_INTERVAL)
+
+
 async def _integration(app: web.Application) -> None:
     """Install the bundled integration and check Home Assistant runs it; Home Assistant may still be starting."""
     studio: Studio = app["studio"]
@@ -64,6 +79,8 @@ async def _integration(app: web.Application) -> None:
         try:
             info = await studio.ensure_integration()
             _LOGGER.info("integration: %s (%s)", info["state"], info.get("message") or "ok")
+            if info["state"] == "ready":
+                await studio.push_metrics()
             return
         except HAError as err:
             _LOGGER.info("integration check waits for Home Assistant (%s)", err)
@@ -78,10 +95,11 @@ async def _start(app: web.Application) -> None:
         await app["studio"].server.start()
     app["task"] = asyncio.create_task(_background(app))
     app["integration_task"] = asyncio.create_task(_integration(app))
+    app["metrics_task"] = asyncio.create_task(_metrics(app))
 
 
 async def _stop(app: web.Application) -> None:
-    for key in ("task", "integration_task"):
+    for key in ("task", "integration_task", "metrics_task"):
         task = app.get(key)
         if task:
             task.cancel()

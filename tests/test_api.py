@@ -352,3 +352,37 @@ async def test_panel_notices_by_itself_that_the_integration_runs_after_a_restart
     studio.integration_checked -= 20
     status, body = await cmd(client, type="recorder_studio/get_state")
     assert body["result"]["integration"]["state"] == "ready"
+
+
+async def test_full_analysis_pushes_the_figures_to_the_integration(client, studio):
+    await cmd(client, type="recorder_studio/analyze", light=False)
+    pushed = [c for c in studio.ha.calls if c[:2] == ("recorder_studio_db", "update_metrics")]
+    assert pushed and pushed[-1][2]["metrics"]["states_count"] == 100
+    studio.ha.calls.clear()
+    await cmd(client, type="recorder_studio/analyze", light=True)
+    assert not [c for c in studio.ha.calls if c[1] == "update_metrics"]  # the light run does not touch the sensors
+
+
+async def test_light_analysis_keeps_the_extra_figures(client, studio):
+    await cmd(client, type="recorder_studio/analyze", light=False)
+    first = studio.data["stats"]["extra"]
+    await cmd(client, type="recorder_studio/analyze", light=True)
+    assert studio.data["stats"]["extra"] == first and studio.data["stats"]["version"]
+
+
+async def test_db_metrics_command(client, studio):
+    await cmd(client, type="recorder_studio/analyze", light=False)
+    status, body = await cmd(client, type="recorder_studio/db_metrics")
+    r = body["result"]
+    assert status == 200 and r["sensors"]["engine"].startswith("SQLite") and r["tables"]
+
+
+async def test_a_missing_integration_does_not_break_the_analysis(client, studio):
+    from studio.ha import HAError
+
+    async def boom(domain, service, data=None):
+        raise HAError(f"{domain}.{service}: HTTP 400 400: Bad Request")
+
+    studio.ha.call_service = boom
+    status, body = await cmd(client, type="recorder_studio/analyze", light=False)
+    assert status == 200 and body["result"]
