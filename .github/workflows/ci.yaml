@@ -12,7 +12,7 @@ jobs:
         ports: ["5432:5432"]
         options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
       mariadb:
-        image: mariadb:11
+        image: mariadb:13
         env: {MARIADB_ROOT_PASSWORD: pw, MARIADB_DATABASE: ha}
         ports: ["3306:3306"]
         options: --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 5s --health-timeout 5s --health-retries 10
@@ -20,26 +20,26 @@ jobs:
       TEST_PG_DSN: host=127.0.0.1 port=5432 dbname=ha user=postgres password=pw
       TEST_MARIADB: 127.0.0.1:3306:root:pw:ha
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.15"
       - run: pip install aiohttp pytest pytest-aiohttp pyyaml psycopg2-binary pymysql cryptography
       - run: pytest -q -rs
   ha-integration:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.15"
       - run: pip install pytest-homeassistant-custom-component
       - run: python -m pytest tests_ha -q
       - run: python -m pytest tests_ha_recorder -q
   addon-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t recorder-studio-db recorder_studio_db
       - name: Smoke test (SQLite mode serves the panel)
         run: |
@@ -54,7 +54,7 @@ jobs:
       matrix:
         engine: [postgresql, mariadb]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t recorder-studio-db recorder_studio_db
       - name: Start the add-on with the ${{ matrix.engine }} engine, restart it, and check the server comes up each time
         run: |
@@ -87,7 +87,7 @@ jobs:
           docker logs rs > stop.log 2>&1
           grep -n -E "prestop|shutdown|Shutdown|stopping|Stopping" stop.log || true
           pre=$(grep -n "\[prestop\] preparing the stop" stop.log | head -1 | cut -d: -f1)
-          app=$(grep -n "prestop: stopping the database gracefully" stop.log | head -1 | cut -d: -f1)
+          app=$(grep -n "prestop: recorder paused" stop.log | head -1 | cut -d: -f1)
           done_=$(grep -n "prestop: database stopped" stop.log | head -1 | cut -d: -f1)
           test -n "$pre" || { echo "the prestop service did not run"; exit 1; }
           test -n "$app" -a -n "$done_" || { echo "the add-on did not handle /api/prestop"; exit 1; }

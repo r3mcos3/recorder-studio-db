@@ -21,6 +21,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 
+from . import quiet
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ async def async_pause(hass: HomeAssistant) -> dict[str, Any]:
         return {"paused": False, "reason": f"{type(err).__name__}: {err}"}
     cancel = async_call_later(hass, MAX_PAUSE, _auto_resume(hass))
     state["pause"] = {"task": task, "release": release, "cancel": cancel, "since": time.monotonic()}
+    quiet.start(hass)  # the restart that follows is planned: its connection errors are not errors
     _LOGGER.info("Recorder paused (events are queued) for a planned database restart")
     return {"paused": True, "reason": None}
 
@@ -108,6 +110,7 @@ async def async_resume(hass: HomeAssistant, auto: bool = False) -> dict[str, Any
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning("Could not renew the recorder's connections: %s", err)
     pause["release"].set()
+    quiet.end_soon(hass)
     paused_for = round(time.monotonic() - pause["since"], 1)
     _LOGGER.info("Recorder continues after %s s (%s)", paused_for, "automatically" if auto else "on request")
     return {"resumed": True, "auto": auto, "seconds": paused_for, "overflow": bool(pause["task"].overflow)}
@@ -119,3 +122,4 @@ def release_now(hass: HomeAssistant) -> None:
     if pause:
         pause["cancel"]()
         pause["release"].set()
+    quiet.stop(hass)

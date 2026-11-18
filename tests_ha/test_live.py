@@ -126,3 +126,16 @@ async def test_config_flow_creates_the_entry_and_the_service_answers(hass, confi
     assert status == {"version": VERSION}
     again = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     assert again["type"] == "abort" and again["reason"] == "single_instance_allowed"
+
+
+async def test_database_url_kept_in_secrets_yaml_is_resolved(hass, config_dir, recorder):
+    """The add-on writes `db_url: !secret recorder_studio_db_url`; Home Assistant's own loader must resolve it."""
+    url = "mysql://u:pw@h:3306/db?charset=utf8mb4"
+    (config_dir / "secrets.yaml").write_text(f'recorder_studio_db_url: "{url}"\n')
+    activate(config_dir, "db_url: !secret recorder_studio_db_url\n")
+    recorder.db_url = url
+    result = await live.async_apply_live(hass)
+    assert result["applied"], result  # (reason shows what failed)
+    assert "db_url" not in result["restart"]  # same database: no restart for the URL
+    recorder.db_url = "mysql://u:pw@other/db"
+    assert "db_url" in (await live.async_apply_live(hass))["restart"]  # a different database is still noticed

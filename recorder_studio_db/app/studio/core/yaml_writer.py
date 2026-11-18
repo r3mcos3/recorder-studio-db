@@ -20,8 +20,11 @@ def _dump(data: dict) -> str:
     return yaml.safe_dump(data, sort_keys=False, default_flow_style=False).rstrip()
 
 
-def render_yaml(options: dict[str, Any], excluded: list[str], rescued: list[str], rules_text: str = "") -> str:
-    """Render the recorder configuration. Invalid stored rules are ignored, never written."""
+def render_yaml(options: dict[str, Any], excluded: list[str], rescued: list[str], rules_text: str = "", db_url_secret: str | None = None) -> str:
+    """Render the recorder configuration. Invalid stored rules are ignored, never written.
+
+    With `db_url_secret` the database URL (it contains a password) is written as `!secret <name>` instead of plain text.
+    """
     try:
         rules = parse_manual_rules(rules_text)
     except ValueError:
@@ -35,7 +38,7 @@ def render_yaml(options: dict[str, Any], excluded: list[str], rescued: list[str]
     for key in ("db_url", "db_max_retries", "db_retry_wait"):
         value = options.get(key)
         if value not in (None, ""):
-            out.append(_dump({key: value}))
+            out.append(f"db_url: !secret {db_url_secret}" if key == "db_url" and db_url_secret else _dump({key: value}))
     out.append("")
 
     exc_rules = rules.get("exclude", {})

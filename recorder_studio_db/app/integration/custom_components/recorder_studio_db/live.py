@@ -11,6 +11,7 @@ step is guarded: if the recorder looks different from what we expect we change n
 """
 from __future__ import annotations
 
+from functools import partial
 import logging
 from pathlib import Path
 from typing import Any
@@ -76,12 +77,20 @@ async def async_apply_live(hass: HomeAssistant) -> dict[str, Any]:
         from homeassistant.helpers.recorder import get_instance
         from homeassistant.util.yaml import load_yaml_dict
 
+        try:
+            from homeassistant.util.yaml import Secrets
+        except ImportError:  # a Home Assistant without that class: secrets cannot be resolved here
+            Secrets = None
+
         text = await hass.async_add_executor_job(_read, Path(hass.config.path(CONFIG_FILE)))
         if migration.inspect_configuration(text or "", GENERATED_FILE).get("state") != "active":
             result["reason"] = "not_active"  # configuration.yaml does not include our file yet: a restart will not use it either
             result["restart"] = ["configuration"]
             return result
-        raw = await hass.async_add_executor_job(load_yaml_dict, hass.config.path(GENERATED_FILE))
+        # the add-on keeps the database password in secrets.yaml and writes `db_url: !secret ...`; the loader only resolves
+        # that when it is given the secrets of this config folder
+        secrets = Secrets(Path(hass.config.config_dir)) if Secrets else None
+        raw = await hass.async_add_executor_job(partial(load_yaml_dict, hass.config.path(GENERATED_FILE), secrets=secrets))
         conf = rec.CONFIG_SCHEMA({rec.DOMAIN: raw or {}})[rec.DOMAIN]
         instance = get_instance(hass)
         missing = [n for n in NEEDED if not hasattr(instance, n)]

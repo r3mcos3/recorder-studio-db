@@ -1,5 +1,7 @@
 # Recorder Studio DB
 
+> **⚠️ Use at your own risk.** This add-on replaces the database your Home Assistant history lives in, and it is new software. The author is not responsible for lost or damaged data, history, statistics or anything else. **Make a full backup first**, keep your old SQLite file until you are sure everything works, and do not rely on it for anything you cannot afford to lose.
+
 Recorder Studio (what the recorder stores, what fills the database, purge and repack) as a sidebar panel,
 plus an optional database server run by this add-on.
 
@@ -37,6 +39,13 @@ is only needed for the database URL, the commit interval and the first time `con
 `recorder_studio.yaml`. The panel shows when. The Recorder Studio integration from the Marketplace/HACS is not used and not needed.
 
 To remove it completely, uninstall the add-on and delete `custom_components/recorder_studio_db` yourself.
+
+## Database password
+
+The database URL contains a password. The add-on keeps it in your `secrets.yaml` (entry `recorder_studio_db_url`) and
+`recorder_studio.yaml` only says `db_url: !secret recorder_studio_db_url`, so you can keep `recorder_studio.yaml` under
+version control. Do not delete that entry from `secrets.yaml`. If `secrets.yaml` cannot be updated safely, the URL stays in
+`recorder_studio.yaml` and the Database tab tells you why.
 
 ## Safety
 

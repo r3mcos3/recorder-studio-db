@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.8.6
+- **Integration 0.8.2: restart Home Assistant once** after updating.
+- A planned database restart (add-on update, restart or backup) no longer fills the Home Assistant log with errors. While the recorder is paused for it, and for 30 seconds after, "Can't connect" / "Lost connection" errors from the recorder and from other integrations that read the database (for example Spook) are hidden, and one line afterwards says how many. Only connection errors are hidden, and only in that window: a database that goes away at any other moment is still logged as an error.
+
+## 0.8.5
+- Same as 0.8.4 (phone layout, data loss warning), with a fix: `config.yaml` of 0.8.4 was not valid YAML, so Home Assistant never offered that version. Tests now check that the file parses.
+
+## 0.8.4
+- Database tab on a phone: the table with table sizes was wider than the screen and pushed the page sideways. It now fits (the Share bars are hidden on narrow screens) and scrolls sideways if it is still too wide.
+- A clear warning in the README and the add-on documentation: use at your own risk, the author is not responsible for data loss, make a backup first.
+
+## 0.8.3
+- PostgreSQL is no longer labelled experimental. It was tested on a real Home Assistant: recording, live apply without a restart, an add-on restart without losing a value (240 of 240), copying 2.8 million rows of history (statistics identical to the source), all 16 sensors and a repack (VACUUM FULL).
+- PostgreSQL log: the start check no longer logs `FATAL: role "root" does not exist` (cosmetic, it was only the readiness probe).
+
+## 0.8.2
+- **Integration 0.8.1: restart Home Assistant once** after updating. The integration now resolves the `!secret` in `recorder_studio.yaml` (Home Assistant's YAML loader only does that when it is given the secrets of the config folder); without this, changes would have asked for a restart every time.
+- **The database password no longer sits in `recorder_studio.yaml`.** That file is often under version control. The add-on now stores the URL in your `secrets.yaml` (key `recorder_studio_db_url`) and writes `db_url: !secret recorder_studio_db_url`. An existing plain-text password is moved automatically when the add-on starts; only that one line of `recorder_studio.yaml` is changed.
+- Safe by design: the secret is written first and read back, and only then does `recorder_studio.yaml` refer to it. If `secrets.yaml` is not plain YAML or cannot be written, nothing in it is touched, the URL stays in `recorder_studio.yaml` (Home Assistant keeps working) and the Database tab shows why. A copy of the previous `secrets.yaml` is kept in the add-on's own data folder, not next to the original.
+- Keep the `recorder_studio_db_url` entry in `secrets.yaml`: without it Home Assistant cannot read `recorder_studio.yaml`.
+
 ## 0.8.1
 - Fix for 0.8.0: the pause came too late. When a container stops, every process gets SIGTERM at the same instant, so the database was already gone before the add-on could ask the recorder to wait (live test: 3 of 240 values lost). A small service now runs first on a stop: it lets the recorder wait and stops the database gracefully, and only then does the container-wide SIGTERM come. No Home Assistant restart needed for this one (the integration is unchanged).
 

@@ -307,6 +307,7 @@ async def db_status(s: Studio, msg: dict) -> dict:
         "current_url": engines.mask_url(current) if current else None,
         "configured": (current or None) == target,
         "pending_restart": s.pending_restart,
+        "secret_error": s.secret_error,
         "default_sqlite": s.sqlite_file == DEFAULT_SQLITE_FILE,
     }
 

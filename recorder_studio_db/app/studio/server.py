@@ -127,6 +127,10 @@ async def _integration(app: web.Application) -> None:
 async def _start(app: web.Application) -> None:
     if app["studio"].server:
         await app["studio"].server.start()
+    try:
+        await app["studio"].migrate_db_url_secret()
+    except Exception:  # noqa: BLE001 - never block the start-up on this
+        _LOGGER.exception("could not move the database password to secrets.yaml")
     app["task"] = asyncio.create_task(_background(app))
     app["integration_task"] = asyncio.create_task(_integration(app))
     app["metrics_task"] = asyncio.create_task(_metrics(app))
