@@ -317,3 +317,26 @@ async def test_integration_commands(client, studio):
     assert body["result"]["state"] == "ready"
     status, body = await cmd(client, type="recorder_studio/get_state")
     assert body["result"]["integration"]["state"] == "ready"
+
+
+async def test_unknown_service_is_recognised_from_a_bare_400(aiohttp_client, monkeypatch):
+    from studio import ha as ha_module
+
+    async def unknown(request):
+        return web.Response(status=400, text="400: Bad Request")
+
+    async def good(request):
+        return web.json_response({"changed_states": [], "service_response": {"applied": True}})
+
+    app = web.Application()
+    app.router.add_post("/api/services/recorder_studio_db/apply_config", unknown)
+    app.router.add_post("/api/services/recorder_studio/apply_config", good)
+    client = await aiohttp_client(app)
+    monkeypatch.setattr(ha_module, "CORE", str(client.make_url("")).rstrip("/"))
+    h = ha_module.HAClient()
+    try:
+        with pytest.raises(ha_module.HAError, match="service not found"):
+            await h.call_service_response("recorder_studio_db", "apply_config")
+        assert await h.call_service_response("recorder_studio", "apply_config") == {"applied": True}
+    finally:
+        await h.close()

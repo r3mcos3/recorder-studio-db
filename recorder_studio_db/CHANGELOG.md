@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.1
+- Fix: the integration was installed but never activated, because Home Assistant answers an unknown service with a bare `400: Bad Request` and the add-on mistook that for "Home Assistant not reachable". It now creates the integration entry itself.
+
 ## 0.6.0
 - **The add-on now brings its own Home Assistant integration** (`recorder_studio_db`) and installs it into your `custom_components` folder itself. You no longer need the Recorder Studio integration from the Marketplace/HACS; if you have it, it keeps working as a fallback and you can remove it once this one runs.
 - After installing or updating the add-on, Home Assistant needs **one restart** to load the integration. The panel shows a banner with a Restart button and a *Check again* button; the entry is created automatically, there is nothing to set up under Integrations.

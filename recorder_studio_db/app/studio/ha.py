@@ -47,7 +47,8 @@ class HAClient:
     async def call_service_response(self, domain: str, service: str, data: dict | None = None) -> Any:
         """Call a service that answers with a response; returns that response."""
         async with self.session.post(f"{CORE}/api/services/{domain}/{service}?return_response", json=data or {}) as r:
-            if r.status == 400 and "not found" in (await r.text()).lower():
+            if r.status == 400:
+                # Home Assistant answers an unknown service with a bare "400: Bad Request" (these services take no input)
                 raise HAError(f"{domain}.{service}: service not found")
             if r.status >= 300:
                 raise HAError(f"{domain}.{service}: HTTP {r.status} {(await r.text())[:200]}")
