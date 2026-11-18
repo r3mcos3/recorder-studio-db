@@ -66,6 +66,7 @@ async def test_sqlite_keeps_its_connections(hass):
     with patch("homeassistant.helpers.recorder.get_instance", return_value=rec):
         await pause.async_pause(hass)
         await pause.async_resume(hass)
+    pause.release_now(hass)  # also ends the short "hide connection errors" timer that follows a resume
     assert rec.engine.disposed == 0  # disposing would drop an in-memory/WAL database
 
 

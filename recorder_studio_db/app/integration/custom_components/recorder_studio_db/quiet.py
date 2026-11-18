@@ -54,7 +54,9 @@ class PlannedRestartFilter(logging.Filter):
         except Exception:  # noqa: BLE001 - never lose a log record because of this filter
             return True
         if CONNECTION_ERROR.search(text):
-            self.hidden += 1
+            if not getattr(record, "_rs_counted", False):  # the filter sits on every log handler: count a record once
+                record._rs_counted = True  # type: ignore[attr-defined]
+                self.hidden += 1
             return False
         return True
 
