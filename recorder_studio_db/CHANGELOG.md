@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.5
+- The integration now has a logo in Settings > Devices & services.
+
 ## 0.6.4
 - The add-on only uses its own integration. The fallback to the Recorder Studio integration from the Marketplace/HACS is removed.
 

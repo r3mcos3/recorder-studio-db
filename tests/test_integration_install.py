@@ -43,3 +43,11 @@ def test_shared_code_is_identical_to_the_panel_copy():
 def test_manifest_is_valid():
     m = json.loads((integration.SOURCE / "manifest.json").read_text())
     assert m["domain"] == "recorder_studio_db" and m["config_flow"] is True and "recorder" in m["dependencies"]
+
+
+def test_brand_images_are_bundled_and_installed(tmp_path):
+    """Home Assistant (2026.3+) shows custom_components/<domain>/brand/icon.png as the integration's logo."""
+    for name in ("icon.png", "icon@2x.png", "logo.png", "logo@2x.png"):
+        assert (integration.SOURCE / "brand" / name).read_bytes()[:4] == b"\x89PNG"
+    integration.install(tmp_path)
+    assert (integration.target_dir(tmp_path) / "brand" / "icon.png").exists()
