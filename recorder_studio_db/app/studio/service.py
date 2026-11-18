@@ -255,6 +255,7 @@ class Studio:
         save = full
         try:
             stats = await self._collect(full, want_attrs)
+            stats["engine"] = self.engine_label()  # after _collect: it decides which backend Home Assistant writes to
             if full:
                 stats["full_at"] = stats["generated_at"]
                 stats["attr_tried"] = now if want_attrs else previous.get("attr_tried")
@@ -280,10 +281,12 @@ class Studio:
 
     # ---- metrics (panel card + Home Assistant sensors) ------------------
     async def metrics(self) -> dict[str, Any]:
-        names = {"sqlite": "SQLite", "postgresql": "PostgreSQL", "mariadb": "MariaDB"}
-        engine = names[self.server.engine] if self.backend == "sql" and self.server else "SQLite"
         stats = self.data.get("stats") or {}
-        return metrics_core.build(stats, await self.growth(), engine, stats.get("version"))
+        return metrics_core.build(stats, await self.growth(), stats.get("engine") or self.engine_label(), stats.get("version"))
+
+    def engine_label(self) -> str:
+        names = {"sqlite": "SQLite", "postgresql": "PostgreSQL", "mariadb": "MariaDB"}
+        return names[self.server.engine] if self.backend == "sql" and self.server else "SQLite"
 
     async def push_metrics(self) -> bool:
         """Hand the latest figures to the bundled integration (its sensors). Quietly does nothing while it is not running."""

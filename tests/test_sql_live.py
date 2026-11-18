@@ -71,7 +71,8 @@ def test_analyze_against_real_server(dialect, connect, enabled):
     assert res["db_size_bytes"] > 0
     assert any(t["name"] == "states" for t in res["tables"])
     assert res["attr_bytes"] and res["attr_bytes"]["sensor.a"] > 0
-    assert res["version"] and res["extra"]["oldest_ts"] is not None and res["extra"]["rows_estimated"] is True
+    assert res["version"] and res["extra"]["oldest_ts"] is not None
+    assert res["extra"]["rows_estimated"] is False and res["extra"]["table_rows"]["states"] == 40  # exact counts, not catalog estimates
     if dialect == "postgresql":
         assert 0.0 <= res["extra"]["dead_ratio"] <= 1.0
     conn = connect()

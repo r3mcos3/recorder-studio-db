@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.2
+- Fix: the engine sensor said "SQLite 11.8.9-MariaDB" right after the add-on started. The engine name is now stored with the measurement.
+- Row counts for PostgreSQL/MariaDB are counted exactly (time-limited) instead of using the catalog estimate, which was up to 9% off. The "States" figure is the exact total.
+
 ## 0.7.1
 - The sensors get their first values within a minute after Home Assistant has restarted (the add-on offers the figures again every minute while they cannot be delivered, instead of waiting for the next 30-minute round).
 

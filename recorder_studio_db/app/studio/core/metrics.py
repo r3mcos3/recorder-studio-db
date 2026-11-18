@@ -51,7 +51,7 @@ def build(stats: dict[str, Any], growth: dict[str, Any], engine: str, version: s
         "attributes_size": _sum(sizes, ATTRIBUTE_TABLES),
         "events_size": _sum(sizes, EVENT_TABLES),
         "statistics_size": _sum(sizes, STATISTICS_TABLES),
-        "states_count": rows.get("states") if rows.get("states") is not None else (stats.get("total_records") or None),
+        "states_count": stats.get("total_records") or rows.get("states"),  # the sum of the per-entity counts is exact
         "events_count": rows.get("events"),
         "statistics_count": _sum(rows, ("statistics", "statistics_short_term")),
         "records_per_day": stats.get("recent_total"),

@@ -85,12 +85,29 @@ DEAD_SQL = "SELECT COALESCE(SUM(n_dead_tup), 0), COALESCE(SUM(n_live_tup), 0) FR
 
 
 def extras(conn, dialect: str) -> dict[str, Any]:
-    """Estimated rows per table, age of the history and (PostgreSQL) the share of dead tuples. Each part may fail alone."""
-    out: dict[str, Any] = {"table_rows": {}, "oldest_ts": None, "dead_ratio": None, "rows_estimated": True}
+    """Rows per table, age of the history and (PostgreSQL) the share of dead tuples. Each part may fail alone.
+
+    Rows are counted exactly (time-limited); if a count times out the catalog estimate is used for that table.
+    """
+    out: dict[str, Any] = {"table_rows": {}, "oldest_ts": None, "dead_ratio": None, "rows_estimated": False}
+    estimates: dict[str, int] = {}
     try:
-        out["table_rows"] = {str(n): int(r or 0) for n, r in _rows(conn, ROWS_SQL[dialect]) if str(n) in ROW_TABLES}
+        estimates = {str(n): int(r or 0) for n, r in _rows(conn, ROWS_SQL[dialect]) if str(n) in ROW_TABLES}
     except Exception:  # noqa: BLE001
         _rollback(conn)
+    try:
+        cur = conn.cursor()
+        cur.execute(TIMEOUT_SQL[dialect])
+        cur.close()
+    except Exception:  # noqa: BLE001
+        _rollback(conn)
+    for table in estimates:
+        try:
+            out["table_rows"][table] = int(_scalar(conn, f"SELECT COUNT(*) FROM {table}") or 0)
+        except Exception:  # noqa: BLE001 - too slow: keep the estimate and say so
+            _rollback(conn)
+            out["table_rows"][table] = estimates[table]
+            out["rows_estimated"] = True
     try:
         v = _scalar(conn, "SELECT MIN(last_updated_ts) FROM states")
         out["oldest_ts"] = float(v) if v is not None else None

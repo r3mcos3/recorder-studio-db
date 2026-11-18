@@ -402,3 +402,11 @@ async def test_failed_push_is_remembered_so_it_can_be_retried(client, studio):
     assert await studio.push_metrics() is False and studio.metrics_pushed is False
     studio.ha.call_service = good
     assert await studio.push_metrics() is True and studio.metrics_pushed is True
+
+
+async def test_engine_label_is_stored_with_the_figures(client, studio):
+    await cmd(client, type="recorder_studio/analyze", light=False)
+    assert studio.data["stats"]["engine"] == "SQLite"
+    studio.data["stats"]["engine"] = "MariaDB"  # as measured by an earlier run; a label computed before any analysis must not win
+    status, body = await cmd(client, type="recorder_studio/db_metrics")
+    assert body["result"]["sensors"]["engine"].startswith("MariaDB")

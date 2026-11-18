@@ -20,7 +20,7 @@ def test_sizes_are_grouped_for_the_sensors():
     s = m["sensors"]
     assert s["engine"] == "SQLite 3.46" and s["database_size"] == 1000
     assert (s["states_size"], s["attributes_size"], s["events_size"], s["statistics_size"]) == (500, 200, 150, 120)
-    assert (s["states_count"], s["events_count"], s["statistics_count"]) == (480, 70, 1200)
+    assert (s["states_count"], s["events_count"], s["statistics_count"]) == (500, 70, 1200)  # states: the exact total, not the 480 estimate
     assert s["growth_per_day"] == 12 and s["disk_free"] == 5000 and s["days_to_full"] == 400
     assert s["oldest_record"].startswith("2023-11-14")
     assert m["tables"][0] == {"name": "states", "bytes": 500, "rows": 480, "share": 50.0}
@@ -67,3 +67,8 @@ def test_old_table_names_do_not_break_extras(synthetic_db):
     conn = sqlite3.connect(synthetic_db)
     ex = db_stats.extras(conn, {"states"})
     assert ex["table_rows"] == {"states": 100} and ex["oldest_ts"] is None  # no timestamp column in this old schema
+
+
+def test_states_count_prefers_the_exact_total():
+    m = metrics.build(stats(total_records=651_900), {}, "MariaDB")
+    assert m["sensors"]["states_count"] == 651_900  # not the catalog estimate (480)
