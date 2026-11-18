@@ -13,7 +13,6 @@ class FakeHA:
         self.live_result = {"applied": True, "restart": [], "changed": ["filter"], "reason": None}  # what apply_config answers
         self.own_old_code = False  # an older integration without the status service is running
         self.own_version = integration.source_version()  # version of our integration Home Assistant runs (None = not loaded)
-        self.fallback = None  # answer of the Marketplace integration's recorder_studio.apply_config (None = not installed)
         self.flow_error, self.flow_result, self.flow_loads = False, {"type": "create_entry"}, True
 
     async def ws(self, command):
@@ -37,9 +36,7 @@ class FakeHA:
             if service == "status":
                 return {"version": self.own_version}
             return {**self.live_result, "version": self.own_version}
-        if self.fallback is None:
-            raise HAError(f"{domain}.{service}: service not found")
-        return dict(self.fallback)
+        raise HAError(f"{domain}.{service}: service not found")
 
     async def start_config_flow(self, handler):
         from studio import integration
@@ -304,13 +301,6 @@ async def test_integration_install_error_is_reported(studio, monkeypatch):
     monkeypatch.setattr("studio.integration.install", boom)
     info = await studio.ensure_integration()
     assert info["state"] == "error" and "read-only" in info["message"]
-
-
-async def test_apply_falls_back_to_the_marketplace_integration(client, studio):
-    studio.ha.own_version = None
-    studio.ha.fallback = {"applied": True, "restart": [], "changed": ["filter"], "reason": None}
-    status, body = await cmd(client, type="recorder_studio/set_recorded", entity_ids=["sensor.b_uptime"], recorded=False)
-    assert body["result"]["live"]["via"] == "recorder_studio" and not studio.pending_restart
 
 
 async def test_integration_commands(client, studio):

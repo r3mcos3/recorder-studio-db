@@ -67,18 +67,14 @@ class Studio:
         return await self.apply_live()
 
     async def _call_apply(self) -> dict[str, Any] | None:
-        """Ask Home Assistant to apply recorder_studio.yaml: our integration first, the Marketplace one as fallback."""
-        for domain in (bundled.DOMAIN, "recorder_studio"):
-            try:
-                result = await self.ha.call_service_response(domain, "apply_config")
-            except HAError as err:
-                if "not found" not in str(err):
-                    raise
-                continue
-            if isinstance(result, dict):
-                result.setdefault("via", domain)
-                return result
-        return None
+        """Ask Home Assistant (our bundled integration) to apply recorder_studio.yaml; None when it is not running."""
+        try:
+            result = await self.ha.call_service_response(bundled.DOMAIN, "apply_config")
+        except HAError as err:
+            if "not found" not in str(err):
+                raise
+            return None
+        return result if isinstance(result, dict) else None
 
     async def apply_live(self) -> dict[str, Any]:
         try:

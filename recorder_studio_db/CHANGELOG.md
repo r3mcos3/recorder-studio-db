@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.6.4
+- The add-on only uses its own integration. The fallback to the Recorder Studio integration from the Marketplace/HACS is removed.
+
 ## 0.6.3
 - The live apply also works with Home Assistant versions whose recorder has no queued-states index (the guard against a changed recorder was too strict about it).
 

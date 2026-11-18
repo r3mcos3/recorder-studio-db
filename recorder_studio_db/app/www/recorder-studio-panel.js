@@ -206,7 +206,7 @@ class RecorderStudioPanel extends LitElement {
   /** What to tell the user after a save, based on the live-apply result of the backend. */
   _liveText(live, lead = "Saved.") {
     if (live?.applied && !live.restart?.length) return `${lead} Applied, no restart needed.`;
-    if (live?.reason === "integration_missing") return `${lead} Install the Recorder Studio integration to apply this without a restart; for now restart Home Assistant.`;
+    if (live?.reason === "integration_missing") return `${lead} The Recorder Studio DB integration is not running yet (see the Database tab); for now restart Home Assistant.`;
     const keys = (live?.restart || []).filter((k) => k !== "all");
     if (keys.includes("configuration")) return `${lead} Restart once so Home Assistant starts using recorder_studio.yaml.`;
     if (keys.length) return `${lead} Applied, except ${keys.join(" and ")}: that needs a restart.`;
@@ -428,7 +428,7 @@ class RecorderStudioPanel extends LitElement {
             <button class="btn small" ?disabled=${!!this._busy} @click=${() => this._checkIntegration()}>Check again</button></div>`
         : nothing}
       ${d.pending_restart && !d.read_only
-        ? html`<div class="banner warn">${icon("warn")}<span>${d.live?.reason === "integration_missing" ? html`Changes are saved to <code>${d.yaml_file}</code>. Install the <b>Recorder Studio</b> integration to apply them without a restart; for now they apply after a restart.` : d.live?.restart?.length && !d.live.restart.includes("all") && !d.live.restart.includes("configuration") ? html`Applied, except <b>${d.live.restart.join(" and ")}</b>: that only takes effect after a restart.` : html`Changes are saved to <code>${d.yaml_file}</code> but only apply after a restart.`}</span>
+        ? html`<div class="banner warn">${icon("warn")}<span>${d.live?.reason === "integration_missing" ? html`Changes are saved to <code>${d.yaml_file}</code>. The <b>Recorder Studio DB</b> integration is not running yet (see the Database tab), so they apply after a restart.` : d.live?.restart?.length && !d.live.restart.includes("all") && !d.live.restart.includes("configuration") ? html`Applied, except <b>${d.live.restart.join(" and ")}</b>: that only takes effect after a restart.` : html`Changes are saved to <code>${d.yaml_file}</code> but only apply after a restart.`}</span>
             <button class="btn small" @click=${this._askRestart}>${icon("power", 16)} Restart</button></div>`
         : nothing}
       ${d.config.state !== "active" && !d.read_only
@@ -545,7 +545,7 @@ class RecorderStudioPanel extends LitElement {
             ${safe.length ? html`<button class="btn" ?disabled=${this._ro} @click=${() => this._toggle(safe.map((i) => i.entity_id), false)}>Exclude the ${safe.length} without warning</button>` : nothing}
             ${sg.dismissed ? html`<button class="btn ghost" ?disabled=${this._ro || !!this._busy} @click=${() => this._dismiss([], true)}>Show ${sg.dismissed} hidden again</button>` : nothing}
           </div>
-          <p class="muted">Excluding is saved with the bar at the bottom and applies right away (with the Recorder Studio integration installed), without a restart.</p>`
+          <p class="muted">Excluding is saved with the bar at the bottom and applies right away, without a restart.</p>`
         : html`<p class="muted">${icon("check", 16)} Nothing stands out right now. ${sg.dismissed ? html`<button class="link" @click=${() => this._dismiss([], true)}>Show ${sg.dismissed} hidden</button>` : nothing}</p>`}
     </section>`;
   }

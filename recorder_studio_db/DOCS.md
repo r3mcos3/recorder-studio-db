@@ -34,8 +34,7 @@ Database tab shows the status.
 After you save, the add-on writes `recorder_studio.yaml` and calls the service `recorder_studio_db.apply_config`,
 which updates the running recorder: entity filter, retention, auto purge and auto repack apply immediately. A restart
 is only needed for the database URL, the commit interval and the first time `configuration.yaml` is pointed at
-`recorder_studio.yaml`. The panel shows when. You do not need the Recorder Studio integration from the Marketplace/HACS
-any more (if it is installed, it is only used when this one is not running).
+`recorder_studio.yaml`. The panel shows when. The Recorder Studio integration from the Marketplace/HACS is not used and not needed.
 
 To remove it completely, uninstall the add-on and delete `custom_components/recorder_studio_db` yourself.
 
