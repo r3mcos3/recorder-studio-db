@@ -20,7 +20,7 @@ jobs:
       TEST_PG_DSN: host=127.0.0.1 port=5432 dbname=ha user=postgres password=pw
       TEST_MARIADB: 127.0.0.1:3306:root:pw:ha
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -29,7 +29,7 @@ jobs:
   ha-integration:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -39,7 +39,7 @@ jobs:
   addon-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t recorder-studio-db recorder_studio_db
       - name: Smoke test (SQLite mode serves the panel)
         run: |
@@ -54,7 +54,7 @@ jobs:
       matrix:
         engine: [postgresql, mariadb]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t recorder-studio-db recorder_studio_db
       - name: Start the add-on with the ${{ matrix.engine }} engine, restart it, and check the server comes up each time
         run: |
