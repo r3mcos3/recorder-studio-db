@@ -87,7 +87,7 @@ jobs:
           docker logs rs > stop.log 2>&1
           grep -n -E "prestop|shutdown|Shutdown|stopping|Stopping" stop.log || true
           pre=$(grep -n "\[prestop\] preparing the stop" stop.log | head -1 | cut -d: -f1)
-          app=$(grep -n "prestop: stopping the database gracefully" stop.log | head -1 | cut -d: -f1)
+          app=$(grep -n "prestop: recorder paused" stop.log | head -1 | cut -d: -f1)
           done_=$(grep -n "prestop: database stopped" stop.log | head -1 | cut -d: -f1)
           test -n "$pre" || { echo "the prestop service did not run"; exit 1; }
           test -n "$app" -a -n "$done_" || { echo "the add-on did not handle /api/prestop"; exit 1; }
