@@ -27,11 +27,27 @@ def test_missing_bundle_is_an_error(tmp_path):
         integration.install(tmp_path, source=tmp_path / "nothing")
 
 
-def test_version_matches_the_add_on():
-    import re
+# The integration's version is NOT the add-on's version: Home Assistant only has to be restarted to load a new add-on
+# release if the integration code itself changed. So change the code => bump the manifest version and add its hash here.
+KNOWN_CODE = {"0.6.5": "0db90d5c4ec18cdef33b2f657a05009a5ddec20fa86c51b387e3fe4e77dd0a97"}
 
-    addon = re.search(r'^version: "(.+)"', (ROOT / "config.yaml").read_text(), re.M).group(1)
-    assert integration.source_version() == addon
+
+def _code_hash() -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    for path in sorted(integration.SOURCE.rglob("*")):
+        if path.is_file() and "__pycache__" not in path.parts and path.name != "manifest.json":
+            h.update(str(path.relative_to(integration.SOURCE)).encode())
+            h.update(path.read_bytes())
+    return h.hexdigest()
+
+
+def test_version_is_bumped_whenever_the_integration_code_changes():
+    version = integration.source_version()
+    assert KNOWN_CODE.get(version) == _code_hash(), (
+        f"The integration code changed. Bump the version in its manifest.json and add the new hash to KNOWN_CODE: {_code_hash()}"
+    )
 
 
 def test_shared_code_is_identical_to_the_panel_copy():

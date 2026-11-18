@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.6.6
+- The integration has its own version number now (0.6.5): a Home Assistant restart is only asked when the integration code changes, not for every add-on release.
 - The panel notices by itself (within ~15 s) that Home Assistant runs the integration after a restart; the "restart needed" banner disappears without pressing *Check again*.
 
 ## 0.6.5
