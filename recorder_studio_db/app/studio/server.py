@@ -11,7 +11,7 @@ from aiohttp import web
 from . import api
 from .const import ALERT_INTERVAL_HOURS, PORT, WWW_DIR, addon_options
 from . import engines
-from .ha import HAClient
+from .ha import HAClient, HAError
 from .service import Studio
 
 _LOGGER = logging.getLogger("studio")
@@ -57,18 +57,36 @@ async def _background(app: web.Application) -> None:
         await asyncio.sleep(ALERT_INTERVAL_HOURS * 3600)
 
 
+async def _integration(app: web.Application) -> None:
+    """Install the bundled integration and check Home Assistant runs it; Home Assistant may still be starting."""
+    studio: Studio = app["studio"]
+    for attempt in range(40):
+        try:
+            info = await studio.ensure_integration()
+            _LOGGER.info("integration: %s (%s)", info["state"], info.get("message") or "ok")
+            return
+        except HAError as err:
+            _LOGGER.info("integration check waits for Home Assistant (%s)", err)
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("integration check failed")
+            return
+        await asyncio.sleep(30)
+
+
 async def _start(app: web.Application) -> None:
     if app["studio"].server:
         await app["studio"].server.start()
     app["task"] = asyncio.create_task(_background(app))
+    app["integration_task"] = asyncio.create_task(_integration(app))
 
 
 async def _stop(app: web.Application) -> None:
-    task = app.get("task")
-    if task:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+    for key in ("task", "integration_task"):
+        task = app.get(key)
+        if task:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
     if app["studio"].server:
         await app["studio"].server.stop()
     await app["ha"].close()

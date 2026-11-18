@@ -26,11 +26,18 @@ The database lives in the add-on's data folder. Add-on backups stop the add-on f
 
 ## Changes without a restart
 
-Install the **Recorder Studio** integration (version 0.5.0 or newer) as well. After you save, the add-on writes
-`recorder_studio.yaml` and calls its service `recorder_studio.apply_config`, which updates the running recorder:
-entity filter, retention, auto purge and auto repack apply immediately. A restart is only needed for the database URL,
-the commit interval and the first time `configuration.yaml` is pointed at `recorder_studio.yaml`. The panel shows when.
-Without the integration every change needs a restart, as before.
+The add-on installs a small integration of its own (`custom_components/recorder_studio_db`) and creates its entry
+automatically. After the first installation, and after add-on updates that change the integration, restart Home
+Assistant once; the panel shows a banner with a *Restart* button and the card *Home Assistant integration* on the
+Database tab shows the status.
+
+After you save, the add-on writes `recorder_studio.yaml` and calls the service `recorder_studio_db.apply_config`,
+which updates the running recorder: entity filter, retention, auto purge and auto repack apply immediately. A restart
+is only needed for the database URL, the commit interval and the first time `configuration.yaml` is pointed at
+`recorder_studio.yaml`. The panel shows when. You do not need the Recorder Studio integration from the Marketplace/HACS
+any more (if it is installed, it is only used when this one is not running).
+
+To remove it completely, uninstall the add-on and delete `custom_components/recorder_studio_db` yourself.
 
 ## Safety
 

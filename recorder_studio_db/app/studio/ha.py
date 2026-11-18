@@ -1,6 +1,7 @@
 """Client for Home Assistant Core through the Supervisor proxy (REST + websocket) and the Supervisor API."""
 from __future__ import annotations
 
+import json
 import os
 import time
 from typing import Any
@@ -51,6 +52,17 @@ class HAClient:
             if r.status >= 300:
                 raise HAError(f"{domain}.{service}: HTTP {r.status} {(await r.text())[:200]}")
             return (await r.json()).get("service_response")
+
+    async def start_config_flow(self, handler: str) -> dict:
+        """Start a config flow (used to create the entry of the bundled integration; it asks no questions)."""
+        async with self.session.post(f"{CORE}/api/config/config_entries/flow", json={"handler": handler, "show_advanced_options": False}) as r:
+            text = await r.text()
+            if r.status >= 300:
+                raise HAError(f"config flow {handler}: HTTP {r.status} {text[:200]}")
+            try:
+                return json.loads(text)
+            except ValueError:
+                raise HAError(f"config flow {handler}: unexpected answer") from None
 
     async def ws(self, command: str) -> Any:
         """One websocket command (used for the registries; cached briefly)."""

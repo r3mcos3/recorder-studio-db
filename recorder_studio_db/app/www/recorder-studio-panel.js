@@ -422,6 +422,11 @@ class RecorderStudioPanel extends LitElement {
 
       ${d.read_only ? html`<div class="banner info">${icon("check")}<span><b>Read-only mode.</b> Statistics and the entity list work; saving, purging, repacking, restarting and migration are disabled.</span></div>` : nothing}
       ${d.sqlite === false ? html`<div class="banner error">${icon("warn")} The recorder does not use SQLite. This integration only supports SQLite.</div>` : nothing}
+      ${d.integration && ["restart_needed", "error"].includes(d.integration.state) && !d.read_only
+        ? html`<div class="banner warn">${icon("warn")}<span><b>Recorder Studio DB integration.</b> ${d.integration.message}</span>
+            ${d.integration.state === "restart_needed" ? html`<button class="btn small" @click=${this._askRestart}>${icon("power", 16)} Restart</button>` : nothing}
+            <button class="btn small" ?disabled=${!!this._busy} @click=${() => this._checkIntegration()}>Check again</button></div>`
+        : nothing}
       ${d.pending_restart && !d.read_only
         ? html`<div class="banner warn">${icon("warn")}<span>${d.live?.reason === "integration_missing" ? html`Changes are saved to <code>${d.yaml_file}</code>. Install the <b>Recorder Studio</b> integration to apply them without a restart; for now they apply after a restart.` : d.live?.restart?.length && !d.live.restart.includes("all") && !d.live.restart.includes("configuration") ? html`Applied, except <b>${d.live.restart.join(" and ")}</b>: that only takes effect after a restart.` : html`Changes are saved to <code>${d.yaml_file}</code> but only apply after a restart.`}</span>
             <button class="btn small" @click=${this._askRestart}>${icon("power", 16)} Restart</button></div>`
@@ -753,6 +758,31 @@ class RecorderStudioPanel extends LitElement {
     });
   }
 
+  async _checkIntegration() {
+    const r = await this._run("integ", () => this._ws("integration_ensure"), { success: (x) => (x.state === "ready" ? "The integration runs." : x.message) });
+    if (r) {
+      await this._refresh();
+      await this._loadDb();
+    }
+  }
+
+  _cardIntegration() {
+    const i = this._data?.integration;
+    if (!i) return nothing;
+    const text = { ready: "Running", restart_needed: "Restart needed", error: "Problem", unknown: "Not checked yet" }[i.state] || i.state;
+    return html`
+      <div class="card">
+        <h3>Home Assistant integration <span class="muted">version ${i.version}</span></h3>
+        <p>This add-on installs a small integration into your <code>custom_components</code> folder. It lets the add-on change recorder settings without restarting Home Assistant.</p>
+        <p>Status: <b style=${`color:${i.state === "ready" ? "var(--rs-ok)" : i.state === "unknown" ? "inherit" : "var(--rs-warn)"}`}>${text}</b>${i.loaded ? html` · Home Assistant runs <b>${i.loaded}</b>` : nothing}</p>
+        ${i.message ? html`<p class="muted">${i.message}</p>` : nothing}
+        <div class="row">
+          <button class="btn" ?disabled=${!!this._busy} @click=${() => this._checkIntegration()}>Check again</button>
+          ${i.state === "restart_needed" ? html`<button class="btn primary" ?disabled=${this._ro || !!this._busy} @click=${this._askRestart}>${icon("power", 16)} Restart Home Assistant…</button>` : nothing}
+        </div>
+      </div>`;
+  }
+
   _cardHistory() {
     const x = this._db;
     const h = this._hist;
@@ -857,7 +887,8 @@ class RecorderStudioPanel extends LitElement {
           <button class="btn" ?disabled=${!!this._busy} @click=${() => this._loadDb()}>Refresh</button>
         </div>
       </div>
-      ${this._cardHistory()}`;
+      ${this._cardHistory()}
+      ${this._cardIntegration()}`;
   }
 
   _tMaintenance() {

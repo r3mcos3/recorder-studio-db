@@ -1,0 +1,18 @@
+{
+  "domain": "recorder_studio_db",
+  "name": "Recorder Studio DB",
+  "after_dependencies": [],
+  "codeowners": [
+    "@r3mcos3"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "recorder"
+  ],
+  "documentation": "https://github.com/r3mcos3/recorder-studio-db",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/r3mcos3/recorder-studio-db/issues",
+  "requirements": [],
+  "version": "0.6.0"
+}

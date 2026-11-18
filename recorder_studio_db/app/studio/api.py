@@ -11,6 +11,7 @@ from .core import db_stats, migration
 from .core.rules import parse_manual_rules
 from .core.yaml_writer import atomic_write
 from . import engines
+from .ha import HAError
 from .service import Studio
 
 
@@ -73,6 +74,7 @@ async def get_state(s: Studio, msg: dict) -> dict:
         "config": await _config_info(s),
         "pending_restart": s.pending_restart,
         "live": s.live,
+        "integration": dict(s.integration),
         "yaml_file": GENERATED_FILE,
         "read_only": READ_ONLY_MODE,
     }
@@ -337,6 +339,18 @@ async def db_deactivate(s: Studio, msg: dict) -> dict:
     return {"configured": False, "live": live}
 
 
+async def integration_status(s: Studio, msg: dict) -> dict:
+    return dict(s.integration)
+
+
+async def integration_ensure(s: Studio, msg: dict) -> dict:
+    """Check again (after a Home Assistant restart) and, if needed, install/activate the bundled integration."""
+    try:
+        return dict(await s.ensure_integration())
+    except HAError as err:
+        raise ApiError("ha_unreachable", f"Home Assistant cannot be reached: {err}") from None
+
+
 async def history_status(s: Studio, msg: dict) -> dict:
     running = bool(s.server and s.server.running)
     return {
@@ -362,4 +376,4 @@ async def history_copy_start(s: Studio, msg: dict) -> dict:
 
 COMMANDS = {f.__name__: f for f in (
     get_state, set_recorded, save_settings, analyze, preview_purge, purge, repack, restart, remove_orphans, save_alerts,
-    dismiss_suggestions, backup_status, db_status, history_status, history_copy_start, db_set_engine, db_activate, db_deactivate, migration_sources, migration_preview, migration_import, migration_activate)}
+    dismiss_suggestions, backup_status, db_status, integration_status, integration_ensure, history_status, history_copy_start, db_set_engine, db_activate, db_deactivate, migration_sources, migration_preview, migration_import, migration_activate)}

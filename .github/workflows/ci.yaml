@@ -26,6 +26,16 @@ jobs:
           python-version: "3.13"
       - run: pip install aiohttp pytest pytest-aiohttp pyyaml psycopg2-binary pymysql cryptography
       - run: pytest -q -rs
+  ha-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install pytest-homeassistant-custom-component
+      - run: python -m pytest tests_ha -q
+      - run: python -m pytest tests_ha_recorder -q
   addon-build:
     runs-on: ubuntu-latest
     steps:

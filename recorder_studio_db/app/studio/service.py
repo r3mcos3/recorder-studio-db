@@ -11,7 +11,7 @@ from typing import Any
 
 from . import store
 from .const import ACTIVE_WINDOW, ENGINES, ATTR_REFRESH_SECONDS, CONFIG_DIR, CONFIG_FILE, DATA_DIR, DEFAULT_SQLITE_FILE, GENERATED_FILE, LEGACY_FILE, STORE_FILE, addon_options, sqlite_file
-from . import engines
+from . import engines, integration as bundled
 from .core import history_copy, alerts, db_stats, db_stats_sql, history, suggestions, tree, yaml_writer
 from .ha import HAClient, HAError
 
@@ -35,6 +35,7 @@ class Studio:
             self.data["options"]["db_url"] = "mysql://" + url[len("mysql+pymysql://"):]
         self.pending_restart = False
         self.live: dict[str, Any] | None = None
+        self.integration: dict[str, Any] = {"state": "unknown", "version": bundled.source_version(), "loaded": None, "message": None}
         self.copy_progress = history_copy.Progress()
         self._copy_task: asyncio.Task | None = None
         self.active_alerts: list[str] = []
@@ -65,11 +66,25 @@ class Studio:
         await self.write_yaml()
         return await self.apply_live()
 
+    async def _call_apply(self) -> dict[str, Any] | None:
+        """Ask Home Assistant to apply recorder_studio.yaml: our integration first, the Marketplace one as fallback."""
+        for domain in (bundled.DOMAIN, "recorder_studio"):
+            try:
+                result = await self.ha.call_service_response(domain, "apply_config")
+            except HAError as err:
+                if "not found" not in str(err):
+                    raise
+                continue
+            if isinstance(result, dict):
+                result.setdefault("via", domain)
+                return result
+        return None
+
     async def apply_live(self) -> dict[str, Any]:
         try:
-            result = await self.ha.call_service_response("recorder_studio", "apply_config")
-            if not isinstance(result, dict):
-                raise HAError("no response from recorder_studio.apply_config")
+            result = await self._call_apply()
+            if result is None:
+                raise HAError("recorder_studio_db.apply_config: service not found")
         except HAError as err:
             _LOGGER.info("Live apply not possible (%s); a Home Assistant restart is needed", err)
             reason = "integration_missing" if "not found" in str(err) else str(err)
@@ -77,6 +92,51 @@ class Studio:
         self.live = result
         self.pending_restart = bool(result.get("restart"))
         return result
+
+    # ---- the bundled Home Assistant integration -----------------------
+    async def ensure_integration(self) -> dict[str, Any]:
+        """Install the bundled integration, make sure Home Assistant runs it, and report what is still needed.
+
+        state: ready | restart_needed | error. Raises HAError when Home Assistant cannot be reached (callers retry).
+        """
+        info = self.integration
+        info["version"] = bundled.source_version()
+        try:
+            await asyncio.to_thread(bundled.install, self.config_dir)
+        except OSError as err:
+            info.update(state="error", message=f"Could not install the integration into {self.config_dir}/custom_components: {err}")
+            return info
+        loaded = await self._loaded_integration_version()
+        if loaded is None:
+            try:
+                flow = await self.ha.start_config_flow(bundled.DOMAIN)
+            except HAError as err:
+                _LOGGER.info("integration not known to Home Assistant yet (%s)", err)
+                flow = {}
+            if flow.get("type") == "create_entry":
+                for _ in range(10):
+                    loaded = await self._loaded_integration_version()
+                    if loaded:
+                        break
+                    await asyncio.sleep(1)
+        info["loaded"] = loaded
+        if loaded == info["version"]:
+            info.update(state="ready", message=None)
+        elif loaded:
+            info.update(state="restart_needed", message=f"Home Assistant runs version {loaded}, {info['version']} is installed. Restart Home Assistant to load it.")
+        else:
+            info.update(state="restart_needed", message="Restart Home Assistant once to load the Recorder Studio DB integration.")
+        return info
+
+    async def _loaded_integration_version(self) -> str | None:
+        """The version Home Assistant runs, or None when it has not loaded the integration."""
+        try:
+            result = await self.ha.call_service_response(bundled.DOMAIN, "apply_config")
+        except HAError as err:
+            if "not found" in str(err):
+                return None
+            raise
+        return str(result.get("version")) if isinstance(result, dict) and result.get("version") else "unknown"
 
     # ---- database ----------------------------------------------------
     @property

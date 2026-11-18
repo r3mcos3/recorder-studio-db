@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+- **The add-on now brings its own Home Assistant integration** (`recorder_studio_db`) and installs it into your `custom_components` folder itself. You no longer need the Recorder Studio integration from the Marketplace/HACS; if you have it, it keeps working as a fallback and you can remove it once this one runs.
+- After installing or updating the add-on, Home Assistant needs **one restart** to load the integration. The panel shows a banner with a Restart button and a *Check again* button; the entry is created automatically, there is nothing to set up under Integrations.
+- New card **Home Assistant integration** on the Database tab: status, installed and running version.
+- Updates of the integration code (new add-on versions) are installed automatically; the panel tells you when a restart is needed to load them.
+
 ## 0.5.0
 - **No more restarts for most changes.** Excluding entities, retention (`purge_keep_days`), auto purge and auto repack are applied to the running recorder right after you save. Only the database URL, the commit interval and the very first activation still need a Home Assistant restart; the panel says exactly which.
 - This needs the **Recorder Studio integration 0.5.0 or newer** (Marketplace / HACS) next to the add-on; it provides the service `recorder_studio.apply_config`. It also works when the recorder uses PostgreSQL/MariaDB. Without it the add-on behaves as before (restart needed) and says so.
