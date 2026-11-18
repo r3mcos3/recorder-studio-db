@@ -1,0 +1,10 @@
+#!/bin/sh
+# Asks the add-on to prepare for a planned stop (pause the recorder, stop the database gracefully).
+echo "[prestop] preparing the stop"
+if curl -sf -m 12 -X POST http://127.0.0.1:8099/api/prestop; then
+  echo
+  echo "[prestop] done"
+else
+  echo "[prestop] the add-on did not answer (it will be stopped anyway)"
+fi
+exit 0

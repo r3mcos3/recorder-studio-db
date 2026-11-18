@@ -497,3 +497,29 @@ async def test_make_server_wires_the_resume_callback(studio, monkeypatch):
     studio.data["engine"] = "mariadb"
     server = studio.make_server()
     assert server.on_ready == studio.resume_recorder
+
+
+async def test_prestop_pauses_then_stops_the_database(aiohttp_client, studio, monkeypatch):
+    monkeypatch.setenv("STUDIO_DEV", "1")
+    studio.server = OrderedServer("mariadb", studio.ha)
+    await studio.server.start()
+    studio.backend = "sql"
+    app = server.make_app(studio=studio, ha=studio.ha)
+    app.on_startup.clear()
+    client = await aiohttp_client(app)
+    r = await client.post("/api/prestop")
+    body = await r.json()
+    assert r.status == 200 and body == {"paused": True, "database_stopped": True}
+    names = [c[1] for c in studio.ha.calls if c[1] in ("pause_recorder", "stop")]
+    assert names == ["pause_recorder", "stop"]  # the recorder waits BEFORE the database goes down
+    r = await client.post("/api/prestop")  # a second call (the normal shutdown path) is harmless
+    assert r.status == 200 and (await r.json())["paused"] is False
+
+
+async def test_prestop_is_only_open_to_the_container_itself(aiohttp_client, studio, monkeypatch):
+    monkeypatch.delenv("STUDIO_DEV", raising=False)
+    app = server.make_app(studio=studio, ha=studio.ha)
+    app.on_startup.clear()
+    client = await aiohttp_client(app)
+    assert (await client.post("/api/prestop")).status == 200  # the test client connects from 127.0.0.1
+    assert (await client.post("/api/command", json={"type": "recorder_studio/db_status"})).status == 403  # ingress IP only

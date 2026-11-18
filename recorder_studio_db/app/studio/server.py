@@ -18,11 +18,33 @@ _LOGGER = logging.getLogger("studio")
 INGRESS_IP = "172.30.32.2"  # the Supervisor ingress gateway; nothing else may talk to us
 
 
+LOCAL_ONLY_PATHS = {"/api/prestop"}  # called by the container's own stop script, never through ingress
+LOOPBACK = {"127.0.0.1", "::1"}
+
+
 @web.middleware
 async def only_ingress(request: web.Request, handler):
-    if not os.environ.get("STUDIO_DEV") and request.remote != INGRESS_IP:
-        raise web.HTTPForbidden()
+    if not os.environ.get("STUDIO_DEV"):
+        allowed = request.remote in LOOPBACK if request.path in LOCAL_ONLY_PATHS else request.remote == INGRESS_IP
+        if not allowed:
+            raise web.HTTPForbidden()
     return await handler(request)
+
+
+async def prestop(request: web.Request) -> web.Response:
+    """The container is about to stop: let Home Assistant's recorder wait, then stop the database gracefully.
+
+    Called by /usr/local/bin/prestop from an s6 service, which runs before s6 sends SIGTERM to every process. Idempotent.
+    """
+    studio: Studio = request.app["studio"]
+    paused = False
+    if studio.server:
+        with contextlib.suppress(Exception):
+            paused = await asyncio.wait_for(studio.pause_recorder(), PAUSE_TIMEOUT)
+        _LOGGER.info("prestop: recorder paused=%s, stopping the database gracefully", paused)
+        await studio.server.stop()
+        _LOGGER.info("prestop: database stopped")
+    return web.json_response({"paused": paused, "database_stopped": True})
 
 
 async def command(request: web.Request) -> web.Response:
@@ -58,7 +80,7 @@ async def _background(app: web.Application) -> None:
 
 
 METRICS_INTERVAL = 30 * 60  # seconds between background measurements for the sensors
-PAUSE_TIMEOUT = 15  # seconds the shutdown may spend on asking the recorder to wait
+PAUSE_TIMEOUT = 6  # seconds the shutdown may spend on asking the recorder to wait (the container is only given ~10 s)
 METRICS_RETRY = 60  # seconds between attempts while the sensors cannot be reached
 
 
@@ -134,6 +156,7 @@ def make_app(studio: Studio | None = None, ha: HAClient | None = None) -> web.Ap
         studio.server = studio.make_server()
     app["ha"], app["studio"] = ha, studio
     app.router.add_post("/api/command", command)
+    app.router.add_post("/api/prestop", prestop)
     app.router.add_get("/", index)
     app.router.add_static("/", WWW_DIR, follow_symlinks=False)
     app.on_startup.append(_start)

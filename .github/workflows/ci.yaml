@@ -73,6 +73,38 @@ jobs:
           docker restart rs
           wait_running || { docker logs rs; exit 1; }
           echo "restart OK"
+      - name: Stopping the container stops the database gracefully, after the prestop step (not by the container-wide SIGTERM)
+        run: |
+          docker rm -f rs >/dev/null
+          docker run -d --name rs -v "$PWD/data:/data" -v "$PWD/config:/homeassistant" -e STUDIO_DEV=1 -p 8099:8099 recorder-studio-db
+          for i in $(seq 1 120); do
+            curl -sf -X POST localhost:8099/api/command -d '{"type":"recorder_studio/db_status"}' | grep -q '"state": "running", "error": null' && break
+            sleep 1
+          done
+          start=$(date +%s)
+          docker stop rs >/dev/null
+          echo "docker stop took $(( $(date +%s) - start )) s"
+          docker logs rs > stop.log 2>&1
+          grep -n -E "prestop|shutdown|Shutdown|stopping|Stopping" stop.log || true
+          pre=$(grep -n "\[prestop\] preparing the stop" stop.log | head -1 | cut -d: -f1)
+          app=$(grep -n "prestop: stopping the database gracefully" stop.log | head -1 | cut -d: -f1)
+          done_=$(grep -n "prestop: database stopped" stop.log | head -1 | cut -d: -f1)
+          test -n "$pre" || { echo "the prestop service did not run"; exit 1; }
+          test -n "$app" -a -n "$done_" || { echo "the add-on did not handle /api/prestop"; exit 1; }
+          if [ "${{ matrix.engine }}" = mariadb ]; then pattern="Normal shutdown"; else pattern="received fast shutdown request"; fi
+          db=$(grep -n "$pattern" stop.log | head -1 | cut -d: -f1)
+          test -n "$db" || { echo "no database shutdown message found"; exit 1; }
+          echo "prestop=$pre addon-prestop=$app database-shutdown=$db database-stopped=$done_"
+          test "$pre" -le "$db" -a "$app" -le "$db" || { echo "the database was shut down BEFORE the prestop step"; exit 1; }
+          test "$db" -le "$done_" || { echo "unexpected order"; exit 1; }
+          if [ "${{ matrix.engine }}" = mariadb ]; then grep -q "Shutdown complete" stop.log || { echo "MariaDB did not complete its shutdown"; exit 1; }; fi
+          echo "graceful stop OK"
+          docker rm rs >/dev/null
+          docker run -d --name rs -v "$PWD/data:/data" -v "$PWD/config:/homeassistant" -e STUDIO_DEV=1 -p 8099:8099 recorder-studio-db
+          for i in $(seq 1 120); do
+            curl -sf -X POST localhost:8099/api/command -d '{"type":"recorder_studio/db_status"}' | grep -q '"state": "running", "error": null' && break
+            sleep 1
+          done
       - name: Switch engine from the panel API (to the other server and back), no add-on restart
         run: |
           call() { curl -s -X POST localhost:8099/api/command -d "$1"; }

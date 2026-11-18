@@ -1,0 +1,10 @@
+#!/usr/bin/with-contenv sh
+# Does nothing while the add-on runs. When the container stops, s6 stops its services BEFORE it sends SIGTERM to every
+# process. This service gets SIGTERM first and uses that moment to let Home Assistant's recorder wait and to stop the
+# database gracefully (see /usr/local/bin/prestop). Without it the database receives SIGTERM at the same instant as
+# everything else and a commit that is running at that moment is lost.
+trap '/usr/local/bin/prestop; exit 0' TERM
+while :; do
+  sleep 3600 &
+  wait $!
+done

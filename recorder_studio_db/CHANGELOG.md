@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.1
+- Fix for 0.8.0: the pause came too late. When a container stops, every process gets SIGTERM at the same instant, so the database was already gone before the add-on could ask the recorder to wait (live test: 3 of 240 values lost). A small service now runs first on a stop: it lets the recorder wait and stops the database gracefully, and only then does the container-wide SIGTERM come. No Home Assistant restart needed for this one (the integration is unchanged).
+
 ## 0.8.0
 - **No history lost when the add-on restarts.** Before the add-on stops the database (update, restart, backup), it asks Home Assistant's recorder to wait: the recorder keeps its events in memory and writes them once the database is back, after renewing its connections. Until now a commit that happened to run at the moment the server went down could be lost (a few seconds of history).
 - The pause is protected: the recorder continues by itself after 3 minutes, when its queue gets long, when Home Assistant stops or the integration is unloaded.
