@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.2
+- An already stored `mysql+pymysql://` URL is converted to `mysql://` on start.
+
 ## 0.3.1
 - Fix: MariaDB URL now uses `mysql://` (the `mysqlclient` driver Home Assistant ships). `mysql+pymysql://` made the recorder fail with `No module named 'pymysql'`. If you already activated MariaDB, click **Use this database for the recorder** again (or deactivate) and restart HA.
 

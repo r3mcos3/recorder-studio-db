@@ -30,6 +30,9 @@ class Studio:
         self.server = server
         self.backend = "sqlite"  # "sql" while Home Assistant writes into the add-on's PostgreSQL/MariaDB
         self.data: dict[str, Any] = store.load(self.store_path)
+        url = self.data.get("options", {}).get("db_url")
+        if isinstance(url, str) and url.startswith("mysql+pymysql://"):  # 0.3.0 wrote a driver Home Assistant does not ship
+            self.data["options"]["db_url"] = "mysql://" + url[len("mysql+pymysql://"):]
         self.pending_restart = False
         self.active_alerts: list[str] = []
         self._rows: list[dict[str, Any]] = []

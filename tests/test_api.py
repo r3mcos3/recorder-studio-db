@@ -165,3 +165,14 @@ async def test_cannot_stop_the_server_home_assistant_records_into(client, studio
 async def test_invalid_engine_and_filename(client):
     assert (await cmd(client, type="recorder_studio/db_set_engine", engine="oracle", confirm=True))[0] == 400
     assert (await cmd(client, type="recorder_studio/db_set_engine", engine="sqlite", sqlite_file="../x.db", confirm=True))[0] == 400
+
+
+async def test_old_pymysql_url_is_migrated(tmp_path):
+    from studio.service import Studio
+    from studio import store
+    sp = tmp_path / "s.json"
+    data = store.merge({})
+    data["options"]["db_url"] = "mysql+pymysql://u:p@h:3306/db?charset=utf8mb4"
+    store.save(sp, data)
+    studio = Studio(None, config_dir=tmp_path, store_path=sp)
+    assert studio.data["options"]["db_url"] == "mysql://u:p@h:3306/db?charset=utf8mb4"
