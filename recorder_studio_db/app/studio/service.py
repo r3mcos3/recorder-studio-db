@@ -12,7 +12,7 @@ from typing import Any
 from . import store
 from .const import ACTIVE_WINDOW, ENGINES, ATTR_REFRESH_SECONDS, CONFIG_DIR, CONFIG_FILE, DATA_DIR, DEFAULT_SQLITE_FILE, GENERATED_FILE, LEGACY_FILE, STORE_FILE, addon_options, sqlite_file
 from . import engines, integration as bundled
-from .core import metrics as metrics_core, history_copy, alerts, db_stats, db_stats_sql, history, suggestions, tree, yaml_writer
+from .core import metrics as metrics_core, secrets_file, history_copy, alerts, db_stats, db_stats_sql, history, suggestions, tree, yaml_writer
 from .ha import HAClient, HAError
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ class Studio:
             self.data["options"]["db_url"] = "mysql://" + url[len("mysql+pymysql://"):]
         self.pending_restart = False
         self.live: dict[str, Any] | None = None
+        self.secret_error: str | None = None  # why the database password could not be kept in secrets.yaml
         self.metrics_pushed = False  # did the last push reach the sensors?
         self.integration_checked = 0.0  # time.monotonic() of the last check of the bundled integration
         self.integration: dict[str, Any] = {"state": "unknown", "version": bundled.source_version(), "loaded": None, "message": None}
@@ -53,10 +54,51 @@ class Studio:
     def generated_path(self) -> Path:
         return self.config_dir / GENERATED_FILE
 
+    async def _keep_password_secret(self, url: str | None) -> str | None:
+        """Put the database URL in secrets.yaml; returns the secret's name, or None when that is not possible.
+
+        recorder_studio.yaml is often under version control, secrets.yaml normally is not. If secrets.yaml cannot be updated
+        safely the URL stays in recorder_studio.yaml (Home Assistant keeps working) and the reason is shown in the panel.
+        """
+        self.secret_error = None
+        if not secrets_file.has_password(url):
+            return None
+        try:
+            await asyncio.to_thread(secrets_file.set_secret, self.config_dir / "secrets.yaml", secrets_file.SECRET_KEY, url, DATA_DIR / "secrets.yaml.bak")
+            return secrets_file.SECRET_KEY
+        except (secrets_file.SecretsError, OSError) as err:
+            self.secret_error = str(err)
+            _LOGGER.warning("database password stays in recorder_studio.yaml: %s", err)
+            return None
+
     async def write_yaml(self) -> None:
         d = self.data
-        content = yaml_writer.render_yaml(d["options"], d["excluded_entities"], d["rescued_entities"], d["rules_text"])
+        secret = await self._keep_password_secret(d["options"].get("db_url"))  # first the secret, then the reference to it
+        content = yaml_writer.render_yaml(d["options"], d["excluded_entities"], d["rescued_entities"], d["rules_text"], db_url_secret=secret)
         await asyncio.to_thread(yaml_writer.atomic_write, self.generated_path(), content)
+
+    async def migrate_db_url_secret(self) -> bool:
+        """An existing recorder_studio.yaml with the password in plain text: move the password to secrets.yaml.
+
+        Only the db_url line is edited, nothing else in the file. The URL is also adopted into our settings when they do
+        not know it yet, so a later regeneration of the file keeps pointing at the same database.
+        """
+        path = self.generated_path()
+        try:
+            text = await asyncio.to_thread(path.read_text, "utf-8")
+        except OSError:
+            return False
+        url = secrets_file.plain_db_url(text)
+        if not url:
+            return False
+        if not self.data["options"].get("db_url"):
+            self.data["options"]["db_url"] = url
+            await self.save()
+        if await self._keep_password_secret(url) is None:
+            return False
+        await asyncio.to_thread(yaml_writer.atomic_write, path, secrets_file.replace_with_secret(text))
+        _LOGGER.info("database password moved from recorder_studio.yaml to secrets.yaml (%s)", secrets_file.SECRET_KEY)
+        return True
 
     async def persist(self) -> dict[str, Any]:
         """Save our settings, regenerate the YAML file and have Home Assistant apply it to the running recorder.

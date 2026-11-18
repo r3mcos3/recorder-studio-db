@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.2
+- **The database password no longer sits in `recorder_studio.yaml`.** That file is often under version control. The add-on now stores the URL in your `secrets.yaml` (key `recorder_studio_db_url`) and writes `db_url: !secret recorder_studio_db_url`. An existing plain-text password is moved automatically when the add-on starts; only that one line of `recorder_studio.yaml` is changed.
+- Safe by design: the secret is written first and read back, and only then does `recorder_studio.yaml` refer to it. If `secrets.yaml` is not plain YAML or cannot be written, nothing in it is touched, the URL stays in `recorder_studio.yaml` (Home Assistant keeps working) and the Database tab shows why. A copy of the previous `secrets.yaml` is kept in the add-on's own data folder, not next to the original.
+- Keep the `recorder_studio_db_url` entry in `secrets.yaml`: without it Home Assistant cannot read `recorder_studio.yaml`.
+
 ## 0.8.1
 - Fix for 0.8.0: the pause came too late. When a container stops, every process gets SIGTERM at the same instant, so the database was already gone before the add-on could ask the recorder to wait (live test: 3 of 240 values lost). A small service now runs first on a stop: it lets the recorder wait and stops the database gracefully, and only then does the container-wide SIGTERM come. No Home Assistant restart needed for this one (the integration is unchanged).
 

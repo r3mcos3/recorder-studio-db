@@ -38,6 +38,13 @@ is only needed for the database URL, the commit interval and the first time `con
 
 To remove it completely, uninstall the add-on and delete `custom_components/recorder_studio_db` yourself.
 
+## Database password
+
+The database URL contains a password. The add-on keeps it in your `secrets.yaml` (entry `recorder_studio_db_url`) and
+`recorder_studio.yaml` only says `db_url: !secret recorder_studio_db_url`, so you can keep `recorder_studio.yaml` under
+version control. Do not delete that entry from `secrets.yaml`. If `secrets.yaml` cannot be updated safely, the URL stays in
+`recorder_studio.yaml` and the Database tab tells you why.
+
 ## Safety
 
 The add-on only reads your SQLite database. Purging and repacking go through Home Assistant's own recorder services

@@ -523,3 +523,52 @@ async def test_prestop_is_only_open_to_the_container_itself(aiohttp_client, stud
     client = await aiohttp_client(app)
     assert (await client.post("/api/prestop")).status == 200  # the test client connects from 127.0.0.1
     assert (await client.post("/api/command", json={"type": "recorder_studio/db_status"})).status == 403  # ingress IP only
+
+
+async def test_password_goes_to_secrets_yaml_and_yaml_only_refers_to_it(client, studio):
+    import yaml as pyyaml
+
+    (studio.config_dir / "secrets.yaml").write_text("wifi_password: abc\n")
+    url = "mysql://homeassistant:s3cret-pw@host:3306/homeassistant?charset=utf8mb4"
+    studio.data["options"]["db_url"] = url
+    status, body = await cmd(client, type="recorder_studio/set_recorded", entity_ids=["sensor.b_uptime"], recorded=False)
+    assert status == 200
+    text = (studio.config_dir / "recorder_studio.yaml").read_text()
+    assert "db_url: !secret recorder_studio_db_url" in text and "s3cret-pw" not in text
+    assert pyyaml.safe_load((studio.config_dir / "secrets.yaml").read_text()) == {"wifi_password": "abc", "recorder_studio_db_url": url}
+    status, body = await cmd(client, type="recorder_studio/db_status")
+    assert body["result"]["secret_error"] is None
+
+
+async def test_when_secrets_yaml_cannot_be_updated_home_assistant_still_gets_a_working_url(client, studio):
+    (studio.config_dir / "secrets.yaml").write_text("a: [unclosed\n")  # not something we may touch
+    studio.data["options"]["db_url"] = "mysql://homeassistant:s3cret-pw@host:3306/homeassistant"
+    await cmd(client, type="recorder_studio/set_recorded", entity_ids=["sensor.b_uptime"], recorded=False)
+    assert "s3cret-pw" in (studio.config_dir / "recorder_studio.yaml").read_text()  # plain text, but the recorder keeps its database
+    assert (studio.config_dir / "secrets.yaml").read_text() == "a: [unclosed\n"
+    status, body = await cmd(client, type="recorder_studio/db_status")
+    assert "not plain YAML" in body["result"]["secret_error"]
+
+
+async def test_existing_plain_text_password_is_moved_at_start_without_touching_the_rest(studio):
+    import yaml as pyyaml
+
+    url = "mysql://homeassistant:s3cret-pw@host:3306/homeassistant?charset=utf8mb4"
+    (studio.config_dir / "secrets.yaml").write_text("wifi_password: abc\n")
+    original = f"# my own comment\nauto_purge: true\npurge_keep_days: 14\ndb_url: {url}\n\nexclude:\n  entities:\n  - sensor.keep_me\n"
+    (studio.config_dir / "recorder_studio.yaml").write_text(original)
+    assert await studio.migrate_db_url_secret() is True
+    after = (studio.config_dir / "recorder_studio.yaml").read_text()
+    assert after == original.replace(f"db_url: {url}", "db_url: !secret recorder_studio_db_url")  # only that line changed
+    assert pyyaml.safe_load((studio.config_dir / "secrets.yaml").read_text())["recorder_studio_db_url"] == url
+    assert studio.data["options"]["db_url"] == url  # our settings now know the database too
+    assert await studio.migrate_db_url_secret() is False  # nothing left to do
+
+
+async def test_migration_leaves_the_file_alone_if_the_secret_cannot_be_written(studio):
+    url = "mysql://homeassistant:s3cret-pw@host:3306/homeassistant"
+    (studio.config_dir / "secrets.yaml").write_text("- not\n- a mapping\n")
+    original = f"auto_purge: true\ndb_url: {url}\n"
+    (studio.config_dir / "recorder_studio.yaml").write_text(original)
+    assert await studio.migrate_db_url_secret() is False
+    assert (studio.config_dir / "recorder_studio.yaml").read_text() == original  # never point at a secret that is not there
