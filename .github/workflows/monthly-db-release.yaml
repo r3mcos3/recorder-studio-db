@@ -1,0 +1,72 @@
+name: Monthly database release
+# Once a month: build the add-on, and if Alpine ships newer PostgreSQL/MariaDB packages than the last release,
+# run the full CI against the new build and publish a new add-on version (patch bump + changelog line).
+on:
+  schedule:
+    - cron: "0 5 3 * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.cmp.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t recorder-studio-db recorder_studio_db
+      - name: Compare installed database versions with the last release
+        id: cmp
+        run: |
+          docker run --rm --entrypoint sh recorder-studio-db -c 'apk list -I' > installed.txt
+          pg=$(grep -oE '^postgresql18-[0-9][^ ]*' installed.txt | head -1 | sed 's/^postgresql18-//')
+          maria=$(grep -oE '^mariadb-[0-9][^ ]*' installed.txt | head -1 | sed 's/^mariadb-//')
+          printf 'postgresql %s\nmariadb %s\n' "$pg" "$maria" > new_versions.txt
+          cat new_versions.txt
+          if [ -f recorder_studio_db/DB_VERSIONS ] && diff -q recorder_studio_db/DB_VERSIONS new_versions.txt >/dev/null; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: new-versions
+          path: new_versions.txt
+  ci:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    uses: ./.github/workflows/ci.yaml
+  release:
+    needs: [check, ci]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: new-versions
+      - name: Bump the add-on version, update the changelog and push
+        run: |
+          python3 - <<'PY'
+          import re, pathlib
+          new = dict(l.split(" ", 1) for l in pathlib.Path("new_versions.txt").read_text().strip().splitlines())
+          old_p = pathlib.Path("recorder_studio_db/DB_VERSIONS")
+          old = dict(l.split(" ", 1) for l in old_p.read_text().strip().splitlines()) if old_p.exists() else {}
+          cfg = pathlib.Path("recorder_studio_db/config.yaml")
+          m = re.search(r'^version: "(\d+)\.(\d+)\.(\d+)"', cfg.read_text(), re.M)
+          ver = f"{m.group(1)}.{m.group(2)}.{int(m.group(3)) + 1}"
+          cfg.write_text(re.sub(r'^version: ".*"', f'version: "{ver}"', cfg.read_text(), count=1, flags=re.M))
+          const = pathlib.Path("recorder_studio_db/app/studio/const.py")
+          const.write_text(re.sub(r'ADDON_VERSION = ".*"', f'ADDON_VERSION = "{ver}"', const.read_text()))
+          names = {"postgresql": "PostgreSQL", "mariadb": "MariaDB"}
+          parts = [f"{names[k]} {old[k]} -> {new[k]}" if k in old else f"{names[k]} {new[k]}" for k in new if old.get(k) != new[k]]
+          log = pathlib.Path("recorder_studio_db/CHANGELOG.md")
+          text = log.read_text().replace("# Changelog\n", f"# Changelog\n\n## {ver}\n- Automatic monthly release with updated database packages: {', '.join(parts)}. Back up first if you want to be careful; the add-on restarts its database once on update.\n", 1)
+          log.write_text(text)
+          old_p.write_text(pathlib.Path("new_versions.txt").read_text())
+          PY
+          rm new_versions.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Automatic monthly release: updated database packages"
+          git push
