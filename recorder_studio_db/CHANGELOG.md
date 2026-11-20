@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.8
+- Automatic monthly release with updated database packages: MariaDB 11.8.9-r0 -> 11.8.10-r0. Back up first if you want to be careful; the add-on restarts its database once on update.
+
 ## 0.8.7
 - **Integration 0.8.3: restart Home Assistant once** after updating. Only the count in the one-line summary of hidden connection errors was wrong (it counted every error once per log handler); hiding itself was already correct. Not urgent.
 

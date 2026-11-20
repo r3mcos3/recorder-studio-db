@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-ADDON_VERSION = "0.8.7"
+ADDON_VERSION = "0.8.8"
 def _config_dir() -> Path:
     """`homeassistant_config` is mounted at /homeassistant (the add-on's own /config is a different folder)."""
     if os.environ.get("CONFIG_DIR"):
