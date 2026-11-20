@@ -1,8 +1,11 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/base:latest
+# Pinned to a dated base image so Renovate can propose updates (30 days after release, same Alpine version only).
+ARG BUILD_FROM=ghcr.io/home-assistant/base:3.24-2026.11.0
 FROM ${BUILD_FROM}
 
+# Database major versions are pinned on purpose: a new major needs a data migration, so it is never picked up by accident.
+# Minor/patch releases of both arrive with each add-on rebuild.
 RUN apk add --no-cache python3 py3-aiohttp py3-yaml py3-psycopg2 py3-pymysql su-exec \
-    postgresql postgresql-client mariadb mariadb-client
+    postgresql18 postgresql18-client "mariadb~=11.8" "mariadb-client~=11.8"
 
 # Alpine ships MariaDB with skip-networking; Home Assistant must reach it over TCP.
 RUN sed -i "s/^[[:space:]]*skip-networking.*/# skip-networking disabled by Recorder Studio DB/" /etc/my.cnf.d/*.cnf
