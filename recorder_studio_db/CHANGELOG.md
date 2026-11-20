@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.9
+- **Integration 0.8.4: restart Home Assistant once** after updating. While the add-on is being replaced, Docker briefly forgets its name and the recorder logged "Unknown server host" (error 2005). That is now hidden together with the other planned-restart connection errors.
+
 ## 0.8.8
 - Automatic monthly release with updated database packages: MariaDB 11.8.9-r0 -> 11.8.10-r0. Back up first if you want to be careful; the add-on restarts its database once on update.
 

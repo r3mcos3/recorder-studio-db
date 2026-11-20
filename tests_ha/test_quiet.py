@@ -13,6 +13,7 @@ from custom_components.recorder_studio_db.const import DOMAIN
 from test_pause import FakeRecorder
 
 LOST = "Error executing query: (MySQLdb.OperationalError) (2013, 'Lost connection to server during query')"
+UNKNOWN = "Error executing query: (MySQLdb.OperationalError) (2005, \"Unknown server host '455b5752-recorder-studio-db' (-5)\")"
 CANT = "(MySQLdb.OperationalError) (2002, \"Can't connect to server on '455b5752-recorder-studio-db' (115)\")"
 
 
@@ -57,10 +58,10 @@ def test_filter_hides_only_connection_errors_while_the_window_is_open():
     f = quiet.PlannedRestartFilter()
     assert f.filter(_record(LOST)) is True  # window closed: a real error
     f.active = True
-    assert f.filter(_record(LOST)) is False and f.filter(_record(CANT, logging.WARNING)) is False
+    assert f.filter(_record(LOST)) is False and f.filter(_record(CANT, logging.WARNING)) is False and f.filter(_record(UNKNOWN)) is False
     assert f.filter(_record("Error executing query: (1146, \"Table 'states' doesn't exist\")")) is True  # not a connection error
     assert f.filter(_record("something", logging.INFO)) is True
-    assert f.hidden == 2
+    assert f.hidden == 3
 
 
 def test_filter_looks_into_the_exception_too():

@@ -23,7 +23,7 @@ _LOGGER = logging.getLogger(__name__)
 
 GRACE = 30  # seconds after the recorder continues
 CONNECTION_ERROR = re.compile(
-    r"\((?:2002|2003|2006|2013)\b|Lost connection to (?:MySQL )?server|Can't connect to (?:MySQL )?server|MySQL server has gone away"
+    r"\((?:2002|2003|2005|2006|2013)\b|Unknown (?:MySQL )?server host|could not translate host name|Lost connection to (?:MySQL )?server|Can't connect to (?:MySQL )?server|MySQL server has gone away"
     r"|server closed the connection unexpectedly|could not connect to server|terminating connection due to administrator command"
     r"|the database system is (?:shutting down|starting up)|connection to server .* failed|Connection refused",
     re.IGNORECASE,
