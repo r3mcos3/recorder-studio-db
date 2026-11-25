@@ -1,5 +1,5 @@
 # Pinned to a dated base image so Renovate can propose updates (30 days after release, same Alpine version only).
-ARG BUILD_FROM=ghcr.io/home-assistant/base:3.24-2026.11.0
+ARG BUILD_FROM=ghcr.io/home-assistant/base:3.24-2026.11.1
 FROM ${BUILD_FROM}
 
 # Database major versions are pinned on purpose: a new major needs a data migration, so it is never picked up by accident.
